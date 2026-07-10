@@ -12,7 +12,9 @@ jobs:
           cache: true
       - name: Create Android platform
         working-directory: flutter_app
-        run: flutter create . --platforms=android --project-name warqna_mobile --org com.warqna
+        run: |
+          flutter create . --platforms=android --project-name warqna_mobile --org com.warqna
+          if [ -f test/widget_test.dart ] && grep -q "MyApp" test/widget_test.dart; then rm test/widget_test.dart; fi
       - run: flutter pub get
         working-directory: flutter_app
       - name: Configure Android application

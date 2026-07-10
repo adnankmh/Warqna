@@ -2,7 +2,7 @@ name: Build and deploy Flutter Web
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, master]
 permissions:
   contents: read
   pages: write
@@ -21,7 +21,11 @@ jobs:
           cache: true
       - name: Create platform folders
         working-directory: flutter_app
-        run: flutter create . --platforms=web,android,ios --project-name warqna_mobile --org com.warqna
+        run: |
+          flutter create . --platforms=web,android,ios --project-name warqna_mobile --org com.warqna
+          if [ -f test/widget_test.dart ] && grep -q "MyApp" test/widget_test.dart; then rm test/widget_test.dart; fi
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
       - name: Get packages
         working-directory: flutter_app
         run: flutter pub get

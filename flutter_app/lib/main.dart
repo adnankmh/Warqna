@@ -1384,7 +1384,7 @@ class PremiumTopBar extends StatelessWidget {
           const Spacer(),
           IconButton(
             tooltip: L.t(lang, 'friends'),
-            onPressed: () => showFriends(context, controller),
+            onPressed: () => showFriends(context, widget.controller),
             icon: Badge(
               isLabelVisible: controller.incomingRequests.isNotEmpty,
               label: Text('${controller.incomingRequests.length}'),
