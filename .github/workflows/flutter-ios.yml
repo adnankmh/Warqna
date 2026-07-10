@@ -1,0 +1,29 @@
+name: Build iOS unsigned
+on:
+  workflow_dispatch:
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Create iOS platform
+        working-directory: flutter_app
+        run: flutter create . --platforms=ios --project-name warqna_mobile --org com.warqna
+      - run: flutter pub get
+        working-directory: flutter_app
+      - name: Analyze and build unsigned iOS
+        working-directory: flutter_app
+        run: |
+          API_URL="${{ vars.WARQNA_API_URL }}"
+          EXTRA=""
+          if [ -n "$API_URL" ]; then EXTRA="--dart-define=WARQNA_API_URL=$API_URL"; fi
+          flutter analyze
+          flutter build ios --release --no-codesign $EXTRA
+      - uses: actions/upload-artifact@v4
+        with:
+          name: warqna-v142-ios-unsigned
+          path: flutter_app/build/ios/iphoneos/Runner.app

@@ -1,0 +1,3 @@
+ <?php $__env->startSection('content'); ?><section class="hero clean"><h1>منصة ورقنا زون</h1><p>منصة ألعاب ورق عربية متعددة اللاعبين بهوية أصلية، غرف فورية، مسابقات، نوادٍ، متجر، ونظام مستويات.</p><div class="hero-actions"><a class="btn primary" href="<?php echo e(route('register')); ?>">حساب جديد</a><a class="btn" href="<?php echo e(route('login')); ?>">تسجيل الدخول</a></div></section><?php $__env->stopSection(); ?>
+
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\warqna-v142-real-engines-social-admin-premium\backend-laravel\resources\views/home.blade.php ENDPATH**/ ?>

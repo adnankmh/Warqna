@@ -1,0 +1,31 @@
+{
+  "product": "Warqna",
+  "version": "1.42.0+142",
+  "release_date": "2026-07-10",
+  "frontend": "Flutter (Web, Android, iOS)",
+  "backend": "Laravel + Sanctum + SQLite/MySQL-ready",
+  "api_prefix": "/api/mobile/v1",
+  "default_local_backend": "http://127.0.0.1:8006",
+  "admin_seed": {
+    "username": "Adnan",
+    "password": "Adnan123",
+    "tokens": "1000000000000000000"
+  },
+  "economy": {
+    "gameplay_token_cost": 0,
+    "store_confirmation_required": true,
+    "transfer_admin_fee_percent": 10
+  },
+  "engine_count": 18,
+  "languages": ["ar", "en", "de", "tr", "fr", "es"],
+  "validation": {
+    "php_syntax": "passed",
+    "engine_adapter_smoke": "18/18 passed",
+    "dedicated_rule_core_checks": "passed",
+    "uploaded_raw_engine_tests": "passed",
+    "dart_tree_sitter_syntax": "passed",
+    "yaml_parse": "passed",
+    "javascript_syntax": "passed",
+    "flutter_analyze": "configured in GitHub Actions; Flutter SDK unavailable in packaging environment"
+  }
+}

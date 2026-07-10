@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+  <meta name="theme-color" content="#07131f">
+  <meta name="description" content="Warqna premium social card games platform">
+  <title>Warqna v142 — Premium Interactive Demo</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header id="topbar" class="topbar"></header>
+    <main id="screen" class="screen" aria-live="polite"></main>
+    <nav id="bottomNav" class="bottom-nav" aria-label="التنقل الرئيسي"></nav>
+  </div>
+
+  <div id="overlay" class="overlay" aria-hidden="true">
+    <div class="overlay-backdrop" data-action="close-overlay"></div>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <div class="sheet-handle"></div>
+      <button class="sheet-close icon-btn" data-action="close-overlay" aria-label="إغلاق">✕</button>
+      <div id="sheetBody" class="sheet-body"></div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
