@@ -1384,7 +1384,7 @@ class PremiumTopBar extends StatelessWidget {
           const Spacer(),
           IconButton(
             tooltip: L.t(lang, 'friends'),
-            onPressed: () => showFriends(context, widget.controller),
+            onPressed: () => showFriends(context, controller),
             icon: Badge(
               isLabelVisible: controller.incomingRequests.isNotEmpty,
               label: Text('${controller.incomingRequests.length}'),
@@ -1587,7 +1587,7 @@ class _GamesPageState extends State<GamesPage> {
               QuickButton(icon: '📊', label: L.t(lang, 'leaderboard'), onTap: () => showLeaderboard(context)),
               QuickButton(icon: '📖', label: L.t(lang, 'rules'), onTap: () => showRules(context, lang, 'tarneeb')),
               QuickButton(icon: '🏆', label: L.t(lang, 'competitions'), onTap: () => showCompetitions(context, widget.controller)),
-              QuickButton(icon: '👥', label: L.t(lang, 'friends'), onTap: () => showFriends(context, controller)),
+              QuickButton(icon: '👥', label: L.t(lang, 'friends'), onTap: () => showFriends(context, widget.controller)),
             ],
           ),
         ),
