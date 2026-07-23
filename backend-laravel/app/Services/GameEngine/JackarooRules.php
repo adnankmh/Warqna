@@ -30,7 +30,10 @@ class JackarooRules extends AbstractCardRules
     public function validate(array $state,string $playerId,string $action,array $payload): bool
     {
         if(($state['phase']??null)!=='playing'||($state['turn']??null)!==$playerId)return false;
-        if($action==='pass')return empty($this->availableActions($state,$playerId))&&!empty($state['hands'][$playerId]);
+        if($action==='pass'){
+            $playable=array_filter($this->availableActions($state,$playerId),fn($candidate)=>($candidate['type']??'')==='play_card');
+            return empty($playable)&&!empty($state['hands'][$playerId]);
+        }
         if($action!=='play_card')return false;
         $card=$this->canonical((string)($payload['card']??''),$state['hands'][$playerId]??[]);if(!$card)return false;
         foreach($this->availableActions($state,$playerId) as $candidate){
@@ -42,7 +45,8 @@ class JackarooRules extends AbstractCardRules
 
     public function apply(array $state,string $playerId,string $action,array $payload): array
     {
-        if($action==='pass'&&empty($this->availableActions($state,$playerId))&&!empty($state['hands'][$playerId])){
+        $playable=array_filter($this->availableActions($state,$playerId),fn($candidate)=>($candidate['type']??'')==='play_card');
+        if($action==='pass'&&empty($playable)&&!empty($state['hands'][$playerId])){
             $discarded=array_shift($state['hands'][$playerId]);if($discarded)$state['discard'][]=$discarded;
             $state['messages'][]=$this->labelPlayer($playerId).' لا يملك حركة قانونية؛ أسقط ورقة.';
             return $this->completeTurn($state,$playerId);
@@ -112,6 +116,7 @@ class JackarooRules extends AbstractCardRules
                 foreach($this->normalActions($state,$owner,(string)$card,11) as $action)$out[]=$action;
             }elseif($steps!==0){foreach($this->normalActions($state,$owner,(string)$card,$steps) as $action)$out[]=$action;}
         }
+        if(!$out&&!empty($state['hands'][$playerId]))return [['type'=>'pass']];
         return $out;
     }
 
@@ -198,6 +203,9 @@ class JackarooRules extends AbstractCardRules
             if(count($state['deck'])<16){$state['deck']=DeckFactory::secureShuffle(array_merge($state['deck'],$state['discard']));$state['discard']=[];}
             $this->dealRound($state['hands'],$state['deck'],$state['players']);$state['round']=(int)$state['round']+1;
             $state['dealer_index']=((int)($state['dealer_index']??0)+1)%4;
+            $state['turn']=$state['players'][((int)$state['dealer_index']+1)%4];
+            unset($state['last_error_message']);
+            return $state;
         }
         $state['turn']=$this->playerKeyNext($state['players'],$player);unset($state['last_error_message']);return $state;
     }

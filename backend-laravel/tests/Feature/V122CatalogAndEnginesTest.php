@@ -15,8 +15,8 @@ class V122CatalogAndEnginesTest extends TestCase
         $actual=array_keys($games);
         sort($expected); sort($actual);
         $this->assertSame($expected,$actual);
-        $this->assertCount(18,$games);
-        foreach(['ludo','jackaroo','chess'] as $future) $this->assertArrayNotHasKey($future,$games);
+        $this->assertCount(20,$games);
+        foreach(['ludo','chess'] as $future) $this->assertArrayNotHasKey($future,$games);
     }
 
     public function test_every_curated_game_has_a_real_engine_object(): void

@@ -14,6 +14,7 @@ foreach ([
     'BasraRules.php',
     'BackgammonRules.php',
     'JackarooRules.php',
+    'LeekhaRules.php',
     'ChessRules.php',
     'TarneebRules.php',
     'GlobalCardEngineRules.php',
@@ -26,13 +27,7 @@ foreach ([
 
 use App\Services\GameEngine\{EngineRegistry, GameFactory};
 
-$keys = [
-    'tarneeb', 'syrian_tarneeb', 'tarneeb_400',
-    'trix', 'trix_partner', 'trix_complex',
-    'hand', 'hand_partner', 'saudi_hand',
-    'banakil', 'pinochle', 'baloot', 'solitaire_multiplayer',
-    'domino', 'basra', 'backgammon', 'jackaroo', 'chess',
-];
+$keys = EngineRegistry::PRODUCT_KEYS;
 
 $failures = [];
 foreach ($keys as $key) {
@@ -63,7 +58,7 @@ foreach ($keys as $key) {
 }
 
 if ($failures) {
-    fwrite(STDERR, "\nEngine adapter failures:\n- " . implode("\n- ", $failures) . "\n");
+    file_put_contents('php://stderr', "\nEngine adapter failures:\n- " . implode("\n- ", $failures) . "\n");
     exit(1);
 }
 

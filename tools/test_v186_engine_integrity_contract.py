@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static release contract for the Warqnaa V186 18-engine audit."""
+"""Static compatibility contract for the V186 engine base and later additions."""
 from __future__ import annotations
 
 import json
@@ -12,6 +12,7 @@ EXPECTED = [
     "tarneeb_400", "syrian_tarneeb", "trix_complex", "saudi_hand",
     "hand_partner", "trix_partner", "tarneeb_41", "tarneeb_61",
     "pinochle", "solitaire_multiplayer", "domino", "backgammon",
+    "jackaroo", "leekha",
 ]
 
 
@@ -32,8 +33,8 @@ def quoted_keys(block: str) -> list[str]:
 
 def main() -> None:
     release = json.loads(text("RELEASE_VERSION.json"))
-    if release.get("full") != "0.3.5+186":
-        fail("release metadata must be 0.3.5+186")
+    if int(release.get("build", 0)) < 186:
+        fail("release metadata must remain compatible with build 186 or later")
 
     flutter = text("flutter_app/lib/main.dart")
     match = re.search(r"const gamesCatalog = \[(.*?)\n\];", flutter, re.S)
@@ -48,12 +49,12 @@ def main() -> None:
     if not product or quoted_keys(product.group(1)) != EXPECTED:
         fail("EngineRegistry::PRODUCT_KEYS must exactly mirror Flutter")
     registry_keys = re.findall(r"^\s{12}'([a-z0-9_]+)'\s*=>\s*self::entry", registry, re.M)
-    if set(registry_keys) != set(EXPECTED) or len(registry_keys) != 18:
+    if set(registry_keys) != set(EXPECTED) or len(registry_keys) != len(EXPECTED):
         fail(f"registry entries drift: {registry_keys}")
 
     catalog = text("backend-laravel/app/Services/Games/GameCatalog.php")
     catalog_keys = re.findall(r"^\s{12}'([a-z0-9_]+)'\s*=>\s*\[", catalog, re.M)
-    if set(catalog_keys) != set(EXPECTED) or len(catalog_keys) != 18:
+    if set(catalog_keys) != set(EXPECTED) or len(catalog_keys) != len(EXPECTED):
         fail(f"Laravel catalog drift: {catalog_keys}")
     if "'basra'=>[" not in catalog or "'targets'=>[121]" not in catalog:
         fail("Basra must use the audited 121 target")
@@ -100,7 +101,7 @@ def main() -> None:
         if needle not in audit:
             fail("standalone audit scenario missing: " + needle)
 
-    print("[PASS] V186 exact 18-game catalog, rule guards, fail-closed routing, privacy and concurrency contract")
+    print("[PASS] V186 compatibility plus V187 20-game catalog, rule guards, privacy and concurrency contract")
 
 
 if __name__ == "__main__":

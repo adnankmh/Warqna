@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'offline_special_engines.dart';
+
 /// Offline/local fallback engine used by the Flutter Web/PWA build.
 ///
 /// The authoritative online mode remains the Laravel engine. This local engine
@@ -18,6 +20,7 @@ class LocalGameSession {
   final String localeCode;
   final int requestedPlayerCount;
   final Random _random;
+  OfflineSpecialEngine? _special;
 
   bool get _easyAi => difficulty == 'easy';
   bool get _normalAi => difficulty == 'normal';
@@ -55,6 +58,7 @@ class LocalGameSession {
   final List<String> _discard = <String>[];
   final List<List<String>> _melds = <List<String>>[];
   final Set<int> _openedRummySeats = <int>{};
+  final Set<int> _discardDrawRequiresMeld = <int>{};
   final Map<int, int> _teamOpeningThresholds = <int, int>{0: 51, 1: 51};
   final List<String> _table = <String>[];
   final Map<int, String> _trick = <int, String>{};
@@ -89,7 +93,11 @@ class LocalGameSession {
       gameId == 'hand' ||
       gameId == 'hand_partner' ||
       gameId == 'saudi_hand' ||
-      gameId == 'banakil';
+      gameId == 'banakil' ||
+      gameId == 'pinochle';
+
+  bool get _isBanakilFamily =>
+      gameId == 'banakil' || gameId == 'pinochle';
 
   bool get _isBasra => gameId == 'basra';
 
@@ -108,19 +116,27 @@ class LocalGameSession {
   bool get _isBaloot => gameId == 'baloot';
 
   int get playerCount {
+    if (_special != null) return _special!.playerCount;
     if (_isBasra) return 2;
     if (_isHandPartner) return 4;
-    if (gameId == 'banakil') return requestedPlayerCount <= 2 ? 2 : 4;
+    if (_isBanakilFamily) return requestedPlayerCount <= 2 ? 2 : 4;
     if (_isRummy) return requestedPlayerCount.clamp(2, 5).toInt();
     return 4;
   }
 
   void _setup() {
+    _special = createOfflineSpecialEngine(
+      gameId: gameId,
+      requestedPlayerCount: requestedPlayerCount,
+      random: _random,
+    );
+    if (_special != null) return;
     _hands.clear();
     _deck.clear();
     _discard.clear();
     _melds.clear();
     _openedRummySeats.clear();
+    _discardDrawRequiresMeld.clear();
     _teamOpeningThresholds
       ..clear()
       ..addAll(<int, int>{0: 51, 1: 51});
@@ -246,7 +262,7 @@ class LocalGameSession {
     for (var seat = 0; seat < playerCount; seat++) {
       _hands.add(<String>[]);
     }
-    final cardsEach = gameId == 'banakil' ? 18 : 14;
+    final cardsEach = _isBanakilFamily ? 18 : 14;
     for (var card = 0; card < cardsEach; card++) {
       for (var seat = 0; seat < playerCount; seat++) {
         _hands[seat].add(_deck.removeLast());
@@ -258,7 +274,7 @@ class LocalGameSession {
     _starterDiscardPending = true;
     phase = 'discard';
     enginePhase = 'discard';
-    if (gameId == 'banakil') {
+    if (_isBanakilFamily) {
       _messages.add('بناكل: معك 19 ورقة. ارمِ ورقة أولاً، ثم اسحب ونزّل مجموعات من 3 أوراق فأكثر دون حد أدنى.');
     } else {
       _messages.add('هاند: معك 15 ورقة. ارمِ أولاً، ثم افتح بمجموع مجموعة أو عدة مجموعات قيمتها 51 نقطة على الأقل.');
@@ -292,6 +308,10 @@ class LocalGameSession {
   }
 
   Map<String, dynamic> room() {
+    final publicState = _publicState();
+    final publicScores = publicState['scores'] is Map
+        ? Map<String, dynamic>.from(publicState['scores'] as Map)
+        : const <String, dynamic>{};
     return <String, dynamic>{
       'code': 'LOCAL-${gameId.toUpperCase()}',
       'local': true,
@@ -304,14 +324,17 @@ class LocalGameSession {
           'bot_level': index == 0 ? null : difficulty,
           'avatar': index == 0 ? '🦁' : const <String>['🤖','🦅','🌙','🦁','🐉'][(index - 1) % 5],
           'seat': index,
-          'score': _scores[index] ?? 0,
+          'score': publicScores[index == 0 ? 'user:0' : 'bot:$index'] ??
+              _scores[index] ??
+              0,
         };
       }),
-      'state': _publicState(),
+      'state': publicState,
     };
   }
 
   Map<String, dynamic> _publicState() {
+    if (_special != null) return _special!.publicState();
     final state = <String, dynamic>{
       'hand': List<String>.from(_hands.isEmpty ? const <String>[] : _hands[0]),
       'legal_cards': currentSeat == 0 ? _legalCardsFor(0) : <String>[],
@@ -386,7 +409,8 @@ class LocalGameSession {
       if (_localRummyOpened(0)) {
         for (var meldIndex = 0; meldIndex < _melds.length; meldIndex++) {
           final owner = _meldOwners.length > meldIndex ? _meldOwners[meldIndex] : 0;
-          final sameSide = owner == 0 || (_isHandPartner || gameId == 'banakil') && owner.isEven;
+          final sameSide =
+              owner == 0 || (_isHandPartner || _isBanakilFamily) && owner.isEven;
           if (!sameSide) continue;
           for (final card in _hands[0]) {
             final combined = <String>[..._melds[meldIndex], card];
@@ -455,6 +479,10 @@ class LocalGameSession {
       _setup();
       return room();
     }
+    if (_special != null) {
+      _special!.action(action, payload ?? const <String, dynamic>{});
+      return room();
+    }
     if (gameOver) {
       return room();
     }
@@ -473,6 +501,10 @@ class LocalGameSession {
   }
 
   Map<String, dynamic> timeout() {
+    if (_special != null) {
+      _special!.timeout();
+      return room();
+    }
     if (gameOver) {
       _setup();
       return room();
@@ -1101,7 +1133,7 @@ class LocalGameSession {
   }
 
   int _localRummyOpeningRequired(int seat) {
-    if (gameId == 'banakil') return 0;
+    if (_isBanakilFamily) return 0;
     if (_isHandPartner) return _teamOpeningThresholds[seat % 2] ?? 51;
     return 51;
   }
@@ -1127,6 +1159,7 @@ class LocalGameSession {
         _hands[0].add(_deck.removeLast());
       } else if (action == 'draw_discard' && _discard.isNotEmpty) {
         _hands[0].add(_discard.removeLast());
+        _discardDrawRequiresMeld.add(0);
       } else {
         throw StateError('يجب السحب أولاً.');
       }
@@ -1152,6 +1185,7 @@ class LocalGameSession {
       }
       for (final group in groups) { _melds.add(group); _meldOwners.add(0); }
       _recordLocalRummyOpening(0, total);
+      _discardDrawRequiresMeld.remove(0);
       _messages.add('$humanName نزّل ${groups.length} مجموعات بقيمة إجمالية $total.');
       if (_hands[0].isEmpty) _finishRummy(0);
       return;
@@ -1161,7 +1195,8 @@ class LocalGameSession {
       final cards = (payload['cards'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
       if (!_localRummyOpened(0) || index < 0 || index >= _melds.length || cards.isEmpty || !_containsAll(_hands[0], cards)) throw StateError('التركيب غير متاح.');
       final owner = _meldOwners.length > index ? _meldOwners[index] : 0;
-      final sameSide = owner == 0 || (_isHandPartner || gameId == 'banakil') && owner.isEven;
+      final sameSide =
+          owner == 0 || (_isHandPartner || _isBanakilFamily) && owner.isEven;
       final combined = <String>[..._melds[index], ...cards];
       if (!sameSide || !_isValidMeld(combined)) throw StateError('لا يمكن تركيب هذه الأوراق على المجموعة المختارة.');
       for (final card in cards) {
@@ -1188,6 +1223,7 @@ class LocalGameSession {
       _melds.add(cards);
       _meldOwners.add(0);
       _recordLocalRummyOpening(0, meldPoints);
+      _discardDrawRequiresMeld.remove(0);
       _messages.add('$humanName نزّل مجموعة من ${cards.length} أوراق بقيمة $meldPoints.');
       if (_hands[0].isEmpty) {
         _finishRummy(0);
@@ -1196,6 +1232,9 @@ class LocalGameSession {
     }
     if (action != 'discard') {
       throw StateError('اختر ورقة للرمي.');
+    }
+    if (_discardDrawRequiresMeld.contains(0)) {
+      throw StateError('بعد سحب الورقة المكشوفة يجب تنزيل مجموعة قانونية قبل الرمي.');
     }
     final card = payload['card']?.toString() ?? '';
     if (!_hands[0].remove(card)) {
@@ -1256,10 +1295,28 @@ class LocalGameSession {
     phase = 'finished';
     enginePhase = 'finished';
     winnerKey = winner == 0 ? 'user:0' : 'bot:$winner';
-    for (var seat = 0; seat < playerCount; seat++) {
-      _scores[seat] = -_hands[seat].fold<int>(0, (sum, card) => sum + _cardPoints(card));
+    if (_isBanakilFamily) {
+      for (var seat = 0; seat < playerCount; seat++) {
+        final penalty = _hands[seat].fold<int>(
+          0,
+          (sum, card) => sum + _banakilDoubledCardPoints(card),
+        );
+        _scores[seat] = -penalty;
+      }
+      _scores[winner] = 40; // 20 Banakil points, stored as half-points doubled.
+    } else {
+      for (var seat = 0; seat < playerCount; seat++) {
+        if (seat == winner) {
+          _scores[seat] = -30;
+          continue;
+        }
+        final remaining = _hands[seat].fold<int>(
+          0,
+          (sum, card) => sum + _handPenalty(card),
+        );
+        _scores[seat] = remaining + (_localRummyOpened(seat) ? 0 : 100);
+      }
     }
-    _scores[winner] = _scores.values.map((e) => e.abs()).fold<int>(0, (a, b) => a + b);
     if (_isHandPartner) {
       final partner = (winner + 2) % 4;
       _scores[partner] = _scores[winner] ?? 0;
@@ -1275,7 +1332,7 @@ class LocalGameSession {
     final protected = <String>{for (final meld in suggestions) ...meld};
     final candidates = hand.where((card) => !protected.contains(card)).toList();
     final pool = candidates.isEmpty ? List<String>.from(hand) : candidates;
-    pool.sort((a, b) => _cardPoints(b).compareTo(_cardPoints(a)));
+    pool.sort((a, b) => _handPenalty(b).compareTo(_handPenalty(a)));
     return pool.first;
   }
 
@@ -1335,34 +1392,41 @@ class LocalGameSession {
     }
 
     final jokerCount = cards.where((card) => card.startsWith('JOKER')).length;
-    final twoCount = gameId == 'banakil' ? cards.where((card) => _cardRank(card) == '2').length : 0;
-    if (gameId == 'banakil' && (jokerCount > 1 || twoCount > 1)) {
+    final twoCount = _isBanakilFamily
+        ? cards.where((card) => _cardRank(card) == '2').length
+        : 0;
+    if (_isBanakilFamily && (jokerCount > 1 || twoCount > 1)) {
       return false;
     }
     final natural = cards.where((card) {
       if (card.startsWith('JOKER')) return false;
-      return gameId != 'banakil' || _cardRank(card) != '2';
+      return !_isBanakilFamily || _cardRank(card) != '2';
     }).toList();
-    if (natural.isEmpty) {
+    if (natural.length < 2) {
       return false;
     }
     final wildCount = jokerCount + twoCount;
 
     final sameRank = natural.every((card) => _cardRank(card) == _cardRank(natural.first));
     if (sameRank) {
-      if (gameId == 'banakil') {
+      if (_isBanakilFamily) {
         final rank = _cardRank(natural.first);
         final suits = natural.map(_cardSuit).toSet();
         return (rank == '3' || rank == 'A') &&
             suits.length == natural.length &&
             natural.length + wildCount <= 4;
       }
-      return true;
+      final suits = natural.map(_cardSuit).toSet();
+      return suits.length == natural.length &&
+          natural.length + wildCount <= 4;
     }
 
     final sameSuit = natural.every((card) => _cardSuit(card) == _cardSuit(natural.first));
     if (!sameSuit) {
       return false;
+    }
+    if (!_isBanakilFamily) {
+      return _bestResolvedRummyRun(cards) != null;
     }
     final values = natural.map((card) => _standardRanks.indexOf(_cardRank(card))).toList()..sort();
     if (values.toSet().length != values.length) {
@@ -1376,24 +1440,91 @@ class LocalGameSession {
   }
 
   int _rummyPoints(List<String> cards) {
-    if (gameId == 'banakil') {
+    if (_isBanakilFamily) {
       // Half-points are stored doubled to keep the offline engine integer-only.
-      var doubled = 0;
-      for (final card in cards) {
-        final rank = _cardRank(card);
-        if (rank == 'JOKER') {
-          doubled += 8;
-        } else if (rank == '2') {
-          doubled += 4;
-        } else if (rank == '3' || rank == '4' || rank == '5' || rank == '6') {
-          doubled += 1;
-        } else {
-          doubled += 2;
+      return cards.fold<int>(
+        0,
+        (sum, card) => sum + _banakilDoubledCardPoints(card),
+      );
+    }
+
+    final natural = cards
+        .where((card) => !card.startsWith('JOKER'))
+        .toList(growable: false);
+    if (natural.isEmpty) return 0;
+
+    final sameRank = natural.every(
+      (card) => _cardRank(card) == _cardRank(natural.first),
+    );
+    if (sameRank) {
+      final rankValue = _rummyRankValue(_cardRank(natural.first));
+      return cards.length * _handRankPoints(rankValue);
+    }
+
+    final run = _bestResolvedRummyRun(cards);
+    if (run != null) {
+      return run.fold<int>(0, (sum, value) => sum + _handRankPoints(value));
+    }
+    return cards.fold<int>(0, (sum, card) => sum + _handPenalty(card));
+  }
+
+  int _banakilDoubledCardPoints(String card) {
+    final rank = _cardRank(card);
+    if (rank == 'JOKER') return 8;
+    if (rank == '2') return 4;
+    if (rank == '3' || rank == '4' || rank == '5' || rank == '6') return 1;
+    return 2;
+  }
+
+  int _rummyRankValue(String rank) {
+    if (rank == 'A') return 14;
+    if (rank == 'K') return 13;
+    if (rank == 'Q') return 12;
+    if (rank == 'J') return 11;
+    return int.tryParse(rank) ?? 0;
+  }
+
+  int _handRankPoints(int value) {
+    if (value == 1 || value == 14) return 11;
+    if (value >= 10) return 10;
+    return value;
+  }
+
+  int _handPenalty(String card) {
+    if (card.startsWith('JOKER')) return 15;
+    return _handRankPoints(_rummyRankValue(_cardRank(card)));
+  }
+
+  List<int>? _bestResolvedRummyRun(List<String> cards) {
+    final wildCount = cards.where((card) => card.startsWith('JOKER')).length;
+    final raw = cards
+        .where((card) => !card.startsWith('JOKER'))
+        .map((card) => _rummyRankValue(_cardRank(card)))
+        .toList(growable: false);
+    final variants = <List<int>>[raw];
+    if (raw.contains(14)) {
+      variants.add(raw.map((value) => value == 14 ? 1 : value).toList());
+    }
+
+    List<int>? best;
+    var bestValue = -1;
+    for (final natural in variants) {
+      if (natural.toSet().length != natural.length) continue;
+      for (var start = 1; start + cards.length - 1 <= 14; start++) {
+        final run = List<int>.generate(cards.length, (index) => start + index);
+        if (!natural.every(run.contains)) continue;
+        if (run.length - natural.length != wildCount) continue;
+        final score = run.fold<int>(
+          0,
+          (sum, value) => sum + _handRankPoints(value),
+        );
+        if (score > bestValue) {
+          bestValue = score;
+          best = run;
         }
       }
-      return doubled;
     }
-    return cards.fold<int>(0, (sum, card) => sum + _cardPoints(card));
+    return best;
   }
 
   void _basraAction(String action, Map<String, dynamic> payload) {

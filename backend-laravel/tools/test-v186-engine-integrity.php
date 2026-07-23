@@ -1,13 +1,13 @@
 <?php
 /**
- * Warqnaa V186 standalone integrity audit for the exact 18-game product catalog.
+ * Warqnaa V186+ standalone integrity audit for the expanded product catalog.
  * Runs without Laravel/Composer and exercises real engine objects and payloads.
  */
 $engineBase = dirname(__DIR__).'/app/Services/GameEngine';
 require_once dirname(__DIR__).'/app/Services/WarqnaPro/PlayActionNormalizer.php';
 foreach ([
     'GameRuleContract.php','Card.php','DeckFactory.php','AbstractCardRules.php',
-    'DominoRules.php','BasraRules.php','BackgammonRules.php','JackarooRules.php',
+    'DominoRules.php','BasraRules.php','BackgammonRules.php','JackarooRules.php','LeekhaRules.php',
     'ChessRules.php','TarneebRules.php','GlobalCardEngineRules.php',
     'UniversalSocialGameRules.php','EngineRegistry.php','GameFactory.php',
 ] as $file) require_once $engineBase.'/'.$file;
@@ -26,8 +26,11 @@ function v186Assert(bool $ok,string $message): void {
 function v186Players(int $count): array {
     $players=[];for($i=0;$i<$count;$i++)$players[]='user:'.($i+1);return $players;
 }
-function v186Payload(array $action): array {
-    unset($action['type'],$action['reason']);return $action;
+function v186Payload(array $action,array $state=[],string $turn=''): array {
+    $type=(string)($action['type']??'');
+    unset($action['type'],$action['reason']);
+    if($type==='pass_cards')$action['cards']=array_slice($state['hands'][$turn]??[],0,3);
+    return $action;
 }
 function v186ChooseAction(array $actions): ?array {
     $priority=[
@@ -44,11 +47,18 @@ $expected=[
     'tarneeb','trix','hand','banakil','baloot','basra','tarneeb_400',
     'syrian_tarneeb','trix_complex','saudi_hand','hand_partner','trix_partner',
     'tarneeb_41','tarneeb_61','pinochle','solitaire_multiplayer','domino','backgammon',
+    'jackaroo','leekha',
 ];
-v186Check(EngineRegistry::PRODUCT_KEYS===$expected,'canonical product list contains the exact 18 Flutter games');
+v186Check(EngineRegistry::PRODUCT_KEYS===$expected,'canonical product list contains the 20 Flutter games');
 $registryKeys=array_keys(EngineRegistry::all());$catalogKeys=array_keys(GameCatalog::all());
 sort($registryKeys);sort($catalogKeys);$sortedExpected=$expected;sort($sortedExpected);
-v186Check($registryKeys===$sortedExpected && $catalogKeys===$sortedExpected,'registry and Laravel catalog expose the same 18 games');
+v186Check($registryKeys===$sortedExpected && $catalogKeys===$sortedExpected,'registry and Laravel catalog expose the same 20 games');
+$catalog=GameCatalog::all();
+v186Check(
+    ($catalog['banakil']['targets']??[])===[222,150]
+        && ($catalog['pinochle']['targets']??[])===[222,150],
+    'Banakil defaults to 222 for partnerships and offers 150 for one-versus-one'
+);
 try { GameFactory::make('forged_game_key'); v186Check(false,'unknown engines must fail closed'); }
 catch(InvalidArgumentException) { v186Check(true,'unknown engines fail closed instead of using a permissive fallback'); }
 
@@ -60,9 +70,9 @@ foreach(EngineRegistry::PRODUCT_KEYS as $key){
         $turn=(string)$state['turn'];$actions=$rules->availableActions($state,$turn);
         v186Check(!empty($actions),$key.' advertises at least one legal action for the current turn');
         $action=$actions[0];$type=(string)($action['type']??'');
-        v186Check($type!=='' && $type!=='wait' && $rules->validate($state,$turn,$type,v186Payload($action)),$key.' advertised action passes full engine validation');
+        v186Check($type!=='' && $type!=='wait' && $rules->validate($state,$turn,$type,v186Payload($action,$state,$turn)),$key.' advertised action passes full engine validation');
         $other=current(array_values(array_filter($state['players'],fn($player)=>$player!==$turn)));
-        if($other!==false)v186Check(!$rules->validate($state,(string)$other,$type,v186Payload($action)),$key.' rejects the same action out of turn');
+        if($other!==false)v186Check(!$rules->validate($state,(string)$other,$type,v186Payload($action,$state,$turn)),$key.' rejects the same action out of turn');
     }
 }
 
@@ -77,9 +87,9 @@ foreach(EngineRegistry::PRODUCT_KEYS as $key){
         if(!$chosen)break;
         foreach(array_slice($actions,0,20) as $advertised){
             $advertisedType=(string)($advertised['type']??'');
-            v186Assert($advertisedType!=='' && $advertisedType!=='wait' && $rules->validate($state,$turn,$advertisedType,v186Payload($advertised)),$key.' advertises an invalid '.$advertisedType.' action at transition '.($moves+1));
+            v186Assert($advertisedType!=='' && $advertisedType!=='wait' && $rules->validate($state,$turn,$advertisedType,v186Payload($advertised,$state,$turn)),$key.' advertises an invalid '.$advertisedType.' action at transition '.($moves+1));
         }
-        $type=(string)$chosen['type'];$payload=v186Payload($chosen);
+        $type=(string)$chosen['type'];$payload=v186Payload($chosen,$state,$turn);
         v186Assert($rules->validate($state,$turn,$type,$payload),$key.' rejects advertised transition '.($moves+1).' ('.$type.')');
         $state=$rules->apply($state,$turn,$type,$payload);
         v186Assert(empty($state['last_error'])&&empty($state['last_error_message']),$key.' fails transition '.($moves+1).' ('.$type.')');
@@ -115,4 +125,27 @@ $backgammon=GameFactory::make('backgammon')->initialState(v186Players(2));$check
 foreach($backgammon['points'] as $point)$checkers+=(int)$point['count'];
 v186Check($checkers===30 && GameFactory::make('backgammon')->validate($backgammon,'user:1','roll',[]),'Backgammon starts with 30 checkers and a legal server roll');
 
-echo "[PASS] V186 completed real-engine integrity coverage for all 18 product games.\n";
+// Jackaroo rotates the dealer and starts the next four-card round after them.
+$jackarooRules=GameFactory::make('jackaroo');$jackaroo=$jackarooRules->initialState(v186Players(4));
+foreach(v186Players(4) as $player)$jackaroo['hands'][$player]=['2_clubs'];
+foreach(v186Players(4) as $player)$jackaroo=$jackarooRules->apply($jackaroo,$player,'pass',[]);
+v186Check(
+    (int)$jackaroo['round']===2 && (int)$jackaroo['dealer_index']===0 && $jackaroo['turn']==='user:2',
+    'Jackaroo rotates the dealer and next-round starter'
+);
+
+// Leekha does not end merely because partnership totals sum to 101; an
+// individual must reach 101, and the dealer/right-hand starter then rotate.
+$leekhaRules=GameFactory::make('leekha');$leekha=$leekhaRules->initialState(v186Players(4));
+$leekha['phase']='playing';$leekha['turn']='user:1';$leekha['trick']=[];
+$leekha['score']=['user:1'=>60,'user:2'=>0,'user:3'=>41,'user:4'=>0];
+$leekha['hands']=['user:1'=>['A_clubs'],'user:2'=>['2_clubs'],'user:3'=>['3_clubs'],'user:4'=>['4_clubs']];
+foreach(['user:1'=>'A_clubs','user:2'=>'2_clubs','user:3'=>'3_clubs','user:4'=>'4_clubs'] as $player=>$card){
+    $leekha=$leekhaRules->apply($leekha,$player,'play_card',['card'=>$card]);
+}
+v186Check(
+    $leekha['phase']==='passing' && (int)$leekha['round']===2 && $leekha['turn']==='user:2',
+    'Leekha waits for an individual 101 and rotates the next-round starter'
+);
+
+echo "[PASS] V186+ completed real-engine integrity coverage for all 20 product games.\n";

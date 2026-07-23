@@ -236,7 +236,7 @@ class MobileGameController extends Controller
             $playerKeys[] = 'bot:' . $this->botName(count($playerKeys) - 1);
         }
 
-        $target = (int) ($data['target'] ?? $this->defaultTarget($data['game']));
+        $target = (int) ($data['target'] ?? $this->defaultTarget($data['game'], $maxPlayers));
         $engine = GameFactory::make($data['game']);
         $state = $engine->initialState($playerKeys, [
             'target' => $target,
@@ -636,6 +636,10 @@ class MobileGameController extends Controller
             $copy['hand_counts'][$key] = is_array($cards) ? count($cards) : 0;
         }
         unset($copy['hands'], $copy['_tarneeb_v2'], $copy['_global_engine'], $copy['kicked_user_ids']);
+        if (isset($copy['pending_passes']) && is_array($copy['pending_passes'])) {
+            $copy['pass_status'] = array_fill_keys(array_keys($copy['pending_passes']), true);
+            unset($copy['pending_passes']);
+        }
         if (isset($copy['deck']) && is_array($copy['deck'])) {
             $copy['deck_count'] = count($copy['deck']);
             unset($copy['deck']);
@@ -792,7 +796,7 @@ class MobileGameController extends Controller
         return $code;
     }
 
-    private function defaultTarget(string $key): int
+    private function defaultTarget(string $key, ?int $playerCount = null): int
     {
         return match ($key) {
             'tarneeb', 'tarneeb_41', 'syrian_tarneeb', 'tarneeb_400' => 41,
@@ -800,8 +804,7 @@ class MobileGameController extends Controller
             'baloot' => 152,
             'basra' => 121,
             'domino' => 100,
-            'banakil' => 222,
-            'pinochle' => 150,
+            'banakil', 'pinochle' => $playerCount === 2 ? 150 : 222,
             default => 101,
         };
     }

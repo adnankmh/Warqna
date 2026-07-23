@@ -61,7 +61,9 @@ jobs:
         run: php tools/test-v184-official-rules-audit.php
       - name: Stress all registered game engines
         run: php tools/test-v184-engine-stress.php
-      - name: Audit the exact V186 18-game product engines
+      - name: Verify V187 global and offline source contract
+        run: python3 ../tools/test_v187_global_offline_contract.py
+      - name: Audit all V187 20-game product engines
         run: php tools/test-v186-engine-integrity.php
       - name: Run Laravel tests
         run: php artisan test

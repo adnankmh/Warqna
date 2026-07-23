@@ -554,7 +554,7 @@ List<int> v170AllowedPlayerCounts(String gameId) {
       return const [2, 3, 4];
     case 'hand':
     case 'saudi_hand':
-      return const [2, 3, 4];
+      return const [2, 3, 4, 5];
     case 'hand_partner':
       return const [4];
     default:

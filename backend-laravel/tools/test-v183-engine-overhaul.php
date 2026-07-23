@@ -29,7 +29,8 @@ $banakil=new BanakilEngine(); $state=$banakil->newGame(v183Players(4),['seed'=>1
 v183Assert(count($state['hands']['p0'])===19 && count($state['hands']['p1'])===18,'Banakil deals 19/18');
 
 $trix=new TrixEngine(); $state=$trix->newGame(v183Players(4),['seed'=>183]);
-$state=$trix->applyAction($state,'p0',['type'=>'choose_contract','contract'=>'trix']);
+$kingdomOwner=$state['players'][$state['currentIndex']]['id'];
+$state=$trix->applyAction($state,$kingdomOwner,['type'=>'choose_contract','contract'=>'trix']);
 v183Assert($state['phase']==='trix_playing','Trix uses board-building phase');
 $guard=0; while(!$state['gameOver'] && $state['round']===1 && $guard++<300){ $pid=$state['players'][$state['currentIndex']]['id']; $actions=$trix->availableActions($state,$pid); $state=$trix->applyAction($state,$pid,$actions[0]); }
 v183Assert($state['round']===2 || $state['gameOver'],'Trix completes and advances a contract');

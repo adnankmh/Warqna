@@ -104,18 +104,21 @@ for needle in (
         fail(f'missing room/admin integration: {needle}')
 
 
-# The mobile/web catalog exposes eighteen playable entries and keeps Chess hidden.
+# The mobile/web catalog exposes the current 20 playable entries and keeps Chess hidden.
 catalog_match = re.search(r"const gamesCatalog = \[(.*?)\n\];", main_text, re.S)
 if not catalog_match:
     fail('gamesCatalog block is missing')
 catalog_block = catalog_match.group(1)
-if len(re.findall(r"GameInfo\(", catalog_block)) != 18:
-    fail('Flutter catalog must expose exactly 18 games')
+if len(re.findall(r"GameInfo\(", catalog_block)) != 20:
+    fail('Flutter catalog must expose exactly 20 games')
 if "GameInfo('chess'" in catalog_block:
-    fail('Chess must remain hidden from the 18-game player catalog')
+    fail('Chess must remain hidden from the 20-game player catalog')
 for key in ('tarneeb_41','tarneeb_61','pinochle','solitaire_multiplayer','domino','backgammon'):
     if f"GameInfo('{key}'" not in catalog_block:
         fail(f'missing activated server game: {key}')
+for key in ('jackaroo', 'leekha'):
+    if f"GameInfo('{key}'" not in catalog_block:
+        fail(f'missing V187 game: {key}')
 
 api_text = (ROOT / 'flutter_app/lib/services/api_client.dart').read_text(encoding='utf-8')
 if "patch('/admin/games/$gameId'" not in api_text:

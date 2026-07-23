@@ -27,8 +27,8 @@ def require(rel: str, *needles: str) -> str:
 
 def main() -> None:
     meta = json.loads((ROOT / "RELEASE_VERSION.json").read_text(encoding="utf-8"))
-    if meta.get("full") != "0.3.5+186":
-        fail("release must be 0.3.5+186 while retaining the V185 table-store feature")
+    if int(meta.get("build", 0)) < 185:
+        fail("release must retain the V185 table-store feature")
 
     main_source = require(
         "flutter_app/lib/main.dart",

@@ -1052,13 +1052,79 @@ class GlobalCardEngineCore
 
     protected function meldValue(array $cards): int
     {
-        return array_sum(array_map(function ($card): int {
-            if (str_starts_with($card, 'JOKER')) return 25;
-            if (!empty($this->config['wildTwos']) && $this->rank($card)==='2') return 20;
-            $rank = $this->rank($card);
-            if ($rank === 'A') return 15;
-            return min(10, $this->rankValue($card));
-        }, $cards));
+        if (!empty($this->config['banakilScoring'])) {
+            return (int) round(array_sum(array_map(
+                fn($card): float => $this->banakilCardPoints((string) $card) * 2,
+                $cards,
+            )));
+        }
+
+        $natural = array_values(array_filter(
+            $cards,
+            fn($card): bool => !str_starts_with((string) $card, 'JOKER'),
+        ));
+        if (!$natural) return 0;
+
+        $ranks = array_map(fn($card): string => $this->rank((string) $card), $natural);
+        if (count(array_unique($ranks)) === 1) {
+            $value = $this->rummyRankValue($ranks[0]);
+            return count($cards) * $this->handRankPoints($value);
+        }
+
+        $run = $this->bestResolvedRummyRun($cards);
+        if ($run !== null) {
+            return array_sum(array_map(fn(int $value): int => $this->handRankPoints($value), $run));
+        }
+        return array_sum(array_map(fn($card): int => $this->handPenalty((string) $card), $cards));
+    }
+
+    protected function rummyRankValue(string $rank): int
+    {
+        return match ($rank) {
+            'A' => 14,
+            'K' => 13,
+            'Q' => 12,
+            'J' => 11,
+            default => is_numeric($rank) ? (int) $rank : 0,
+        };
+    }
+
+    protected function handRankPoints(int $value): int
+    {
+        if ($value === 1 || $value === 14) return 11;
+        if ($value >= 10) return 10;
+        return $value;
+    }
+
+    /** @return array<int,int>|null */
+    protected function bestResolvedRummyRun(array $cards): ?array
+    {
+        $wildCount = count(array_filter($cards, fn($card): bool => str_starts_with((string) $card, 'JOKER')));
+        $raw = array_values(array_map(
+            fn($card): int => $this->rummyRankValue($this->rank((string) $card)),
+            array_filter($cards, fn($card): bool => !str_starts_with((string) $card, 'JOKER')),
+        ));
+        $variants = [$raw];
+        if (in_array(14, $raw, true)) {
+            $variants[] = array_map(fn(int $value): int => $value === 14 ? 1 : $value, $raw);
+        }
+
+        $best = null;
+        $bestValue = -1;
+        foreach ($variants as $natural) {
+            if (count(array_unique($natural)) !== count($natural)) continue;
+            for ($start = 1; $start + count($cards) - 1 <= 14; $start++) {
+                $run = range($start, $start + count($cards) - 1);
+                $containsAll = count(array_diff($natural, $run)) === 0;
+                if (!$containsAll || count($run) - count($natural) !== $wildCount) continue;
+                $score = array_sum(array_map(fn(int $value): int => $this->handRankPoints($value), $run));
+                if ($score > $bestValue) {
+                    $bestValue = $score;
+                    $best = $run;
+                }
+            }
+        }
+        return $best;
     }
 
     protected function containsCards(array $hand, array $selected): bool

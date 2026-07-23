@@ -22,6 +22,17 @@ assert module.unexpected_root_entries({
     "FILES_MANIFEST.txt",
     "VALIDATION_V0.2.1.txt",
 }) == [], "Known patch metadata must be accepted"
+assert module.unexpected_root_entries({
+    "FEATURES_IMPLEMENTED_AR.md",
+    "GITHUB_BUILD_FIX_V143_AR.md",
+    "QUALITY_REPORT_V142_AR.md",
+    "README_AR.md",
+    "RELEASE_MANIFEST_V142.json",
+    "START_WEB_DEMO.bat",
+    "START_WEB_DEMO.sh",
+    "WARQNA_V142_REAL_ENGINES_FULLSTACK_AR.md",
+    "web_demo",
+}) == [], "Exact legacy V142/V143 root entries must remain patch-compatible"
 assert module.unexpected_root_entries({"rogue.txt"}) == ["rogue.txt"], "Unexpected root files must remain rejected"
 assert module.unexpected_root_entries({".git", "rogue.txt"}) == ["rogue.txt"]
-print("[PASS] Clean-root policy accepts Git metadata and still rejects project-root clutter")
+print("[PASS] Clean-root policy accepts Git/patch/legacy metadata and still rejects project-root clutter")

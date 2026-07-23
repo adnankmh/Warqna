@@ -1,0 +1,26 @@
+{
+  "version": "0.3.6",
+  "build": 187,
+  "display": "V0.3.6",
+  "type": "global-offline-20-game-edition",
+  "name": "Warqnaa V0.3.6 Global Offline 20-Game Edition",
+  "features": [
+    "exact 20-game contract shared by Flutter, Laravel catalog, engine registry and CI",
+    "all player-catalog games available in offline bot mode without a server",
+    "new independently tested Jackaroo and Leekha engines",
+    "manual multi-meld, layoff and drag-to-reorder controls for Hand and Banakil families",
+    "color-separated meld groups in the live room",
+    "fail-closed game factory and server-authoritative structured-payload validation",
+    "transactional action and timeout state transitions with row locks and revisions",
+    "opponent-hand, shuffle-seed and private-engine-state redaction",
+    "engine-health administration dashboard",
+    "backwards-compatible clean-root handling for exact V142/V143 release leftovers"
+  ],
+  "catalog": {
+    "playable_games": 20,
+    "offline_games": 20,
+    "newly_activated": ["jackaroo", "leekha"],
+    "future_engines_hidden": ["chess"],
+    "rules_profile": "warqnaa-2026.07-v187"
+  }
+}

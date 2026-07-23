@@ -14,6 +14,7 @@ final class EngineRegistry
         'tarneeb_400','syrian_tarneeb','trix_complex','saudi_hand',
         'hand_partner','trix_partner','tarneeb_41','tarneeb_61',
         'pinochle','solitaire_multiplayer','domino','backgammon',
+        'jackaroo','leekha',
     ];
 
     /** @return array<string,array<string,mixed>> */
@@ -74,6 +75,12 @@ final class EngineRegistry
             'backgammon' => self::entry('طاولة الزهر','Backgammon','dedicated_backgammon_v186',2,2,false,15,30,['roll','move','pass'],
                 'محرك طاولة زهر يتحقق من اتجاه الحركة، النرد، أولوية دخول الأحجار من البار والإخراج.',
                 'Backgammon engine validates movement direction, dice, bar-entry priority and bearing off.'),
+            'jackaroo' => self::entry('جاكارو','Jackaroo','dedicated_jackaroo_v187',4,4,true,4,52,['play_card','pass'],
+                'أربعة لاعبين بفريقين وأربعة أحجار لكل لاعب. الآس والملك للإنزال، الآس 1 أو 11، الولد للتبديل، السبعة قابلة للتقسيم، والأربعة للخلف.',
+                'Four players in partnerships with four marbles each. A/K start, Ace moves 1 or 11, Jack swaps, seven splits and four moves backward.'),
+            'leekha' => self::entry('ليخة','Leekha','dedicated_leekha_v187',4,4,true,13,52,['pass_cards','play_card'],
+                'أربعة لاعبين بفريقين. يمرر كل لاعب ثلاث أوراق، ويلتزم بالنوع، وعند انعدامه يرمي Q♠ أو 10♦ أولاً. القلوب نقطة، Q♠ ثلاث عشرة، و10♦ عشر نقاط؛ الأقل يفوز عند 101.',
+                'Four-player partnership game with three-card passing, follow-suit and forced Q♠/10♦ disposal when void. Hearts score 1, Q♠ 13 and 10♦ 10; lower score wins at 101.'),
         ];
     }
 
@@ -85,7 +92,7 @@ final class EngineRegistry
             'rules'=>['ar'=>$rulesAr,'en'=>$rulesEn],
             'server_authoritative'=>true,
             'free_play'=>true,
-            'rules_version'=>'warqnaa-2026.07-v186',
+            'rules_version'=>'warqnaa-2026.07-v187',
             'core_rules_complete'=>true,
             'fair_shuffle'=>'server_seeded_shuffle_with_unique_deck_validation',
         ];

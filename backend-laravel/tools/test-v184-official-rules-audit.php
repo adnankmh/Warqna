@@ -21,6 +21,10 @@ function auditAction(array $actions,string $type,?int $amount=null): array {
     throw new RuntimeException("Missing action $type".($amount!==null?"/$amount":''));
 }
 class AuditTrixEngine extends TrixEngine { public function penalties(array $state): array { return $this->trixPenaltiesFromEvents($state); } }
+class AuditHandEngine extends SaudiHandEngine {
+    public function meldPoints(array $cards): int { return $this->meldValue($cards); }
+    public function penalty(string $card): int { return $this->handPenalty($card); }
+}
 
 // Syrian Tarneeb 41: 13 cards, exposed-card trump, independent 2-13 declarations, total >= 11.
 $engine=new SyrianTarneebEngine();
@@ -47,14 +51,30 @@ foreach([2,3,4,5] as $count){
     auditCheck(count($state['hands']['p0'])===15 && count($state['hands']['p'.($count-1)])===14,"Hand supports $count players with 15/14 deal");
     auditCheck($state['phase']==='discard' && !empty($state['starterDiscardPending']),'Hand starter must discard the extra card first');
 }
+$pointAudit=new AuditHandEngine();
+auditCheck(
+    $pointAudit->meldPoints(['10_C','J_C','Q_C','K_C','A_C'])===51
+        && $pointAudit->meldPoints(['7_C','7_D','JOKER1'])===21
+        && $pointAudit->penalty('A_C')===11
+        && $pointAudit->penalty('JOKER1')===15,
+    'Hand values Ace at 11 and a meld Joker as the card it replaces'
+);
+$drawState=$pointAudit->newGame(auditPlayers(2),['seed'=>187]);
+$drawState['phase']='draw';$drawState['starterDiscardPending']=false;$drawState['currentIndex']=0;
+$drawState['discard']=['7_C'];$drawState['hands']['p0']=['8_C','9_C','10_C'];
+$drawState=$pointAudit->applyAction($drawState,'p0',['type'=>'draw_discard']);
+$discardRejected=false;
+try { $pointAudit->applyAction($drawState,'p0',['type'=>'discard','card'=>'8_C']); }
+catch (GameEngineException) { $discardRejected=true; }
+auditCheck($discardRejected,'Hand requires a legal meld after drawing the exposed discard');
 
 // Partnership Hand: first team opens at 51, second team must beat that value by one.
 $engine=new HandPartnershipEngine();
 $state=$engine->newGame(auditPlayers(4),['seed'=>184]);
 $state['phase']='discard';$state['starterDiscardPending']=false;$state['currentIndex']=0;
-$state['hands']['p0']=['A_C','A_D','A_S','A_H','2_C'];
-$state=$engine->applyAction($state,'p0',['type'=>'meld','cards'=>['A_C','A_D','A_S','A_H']]);
-auditCheck(($state['teamOpened'][0]??false)===true && (int)($state['teamOpeningThresholds'][1]??0)===61,'Partnership Hand raises the second team opening above the first team value');
+$state['hands']['p0']=['10_C','J_C','Q_C','K_C','A_C','2_D'];
+$state=$engine->applyAction($state,'p0',['type'=>'meld','cards'=>['10_C','J_C','Q_C','K_C','A_C']]);
+auditCheck(($state['teamOpened'][0]??false)===true && (int)($state['teamOpeningThresholds'][1]??0)===52,'Partnership Hand values 10-J-Q-K-A at 51 and raises the second team opening by one');
 
 // Banakil: 18+19, no opening floor, 2/4 players, target 222.
 $engine=new BanakilEngine();

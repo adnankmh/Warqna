@@ -108,6 +108,10 @@ def check_required_files() -> None:
         "tools/test_v184_official_game_rules_contract.py",
         "tools/test_v185_world_class_contract.py",
         "tools/test_v186_engine_integrity_contract.py",
+        "tools/test_v187_global_offline_contract.py",
+        "flutter_app/lib/engines/offline_special_engines.dart",
+        "flutter_app/test/offline_special_engines_test.dart",
+        "backend-laravel/app/Services/GameEngine/LeekhaRules.php",
         "flutter_app/lib/v185_world_class.dart",
         "flutter_app/assets/images/tables/reference/reference_catalog_v185.png",
         "backend-laravel/tests/Feature/V185WorldClassTableStoreTest.php",
@@ -191,6 +195,25 @@ ROOT_IGNORED_METADATA = {
     ".DS_Store", "Thumbs.db",
 }
 
+# Older Warqnaa source bundles (notably V142/V143) placed these documented
+# helpers in the repository root. A patch-only ZIP cannot delete files that are
+# already present in the user's checkout, so treating them as arbitrary clutter
+# makes every workflow fail even though the current application tree is valid.
+#
+# Keep this list exact: it is a backwards-compatibility bridge, not a wildcard.
+# New root files remain rejected by the clean-root policy.
+LEGACY_ROOT_ENTRIES = {
+    "FEATURES_IMPLEMENTED_AR.md",
+    "GITHUB_BUILD_FIX_V143_AR.md",
+    "QUALITY_REPORT_V142_AR.md",
+    "README_AR.md",
+    "RELEASE_MANIFEST_V142.json",
+    "START_WEB_DEMO.bat",
+    "START_WEB_DEMO.sh",
+    "WARQNA_V142_REAL_ENGINES_FULLSTACK_AR.md",
+    "web_demo",
+}
+
 # Patch packages may leave human-readable helper files in the repository root.
 # They are harmless release metadata, not application/runtime files. Keep the
 # clean-root policy strict for arbitrary clutter while allowing these known
@@ -217,6 +240,7 @@ def unexpected_root_entries(names) -> list[str]:
         str(name) for name in names
         if str(name) not in ROOT_ALLOWED_ENTRIES
         and str(name) not in ROOT_IGNORED_METADATA
+        and str(name) not in LEGACY_ROOT_ENTRIES
         and not is_known_patch_artifact(str(name))
     )
 
@@ -227,15 +251,21 @@ def check_clean_root_policy_self_test() -> None:
         fail("Clean-root policy rejected standard repository metadata")
     if unexpected_root_entries({"APPLY_PATCH_AR.txt", "FILES_MANIFEST.txt", "VALIDATION_V0.2.1.txt"}):
         fail("Clean-root policy rejected known patch metadata")
+    if unexpected_root_entries(LEGACY_ROOT_ENTRIES):
+        fail("Clean-root policy rejected exact legacy Warqnaa compatibility entries")
     if unexpected_root_entries({"unexpected.tmp"}) != ["unexpected.tmp"]:
         fail("Clean-root policy stopped rejecting real unexpected root files")
-    print("[OK] Clean-root policy self-test (Git/patch metadata accepted, clutter rejected)")
+    print("[OK] Clean-root policy self-test (Git/patch/legacy metadata accepted, clutter rejected)")
 
 
 def check_clean_root() -> None:
-    unexpected = unexpected_root_entries(path.name for path in ROOT.iterdir())
+    present = {path.name for path in ROOT.iterdir()}
+    unexpected = unexpected_root_entries(present)
     if unexpected:
         fail("Unexpected files in clean project root: " + ", ".join(unexpected))
+    legacy = sorted(present & LEGACY_ROOT_ENTRIES)
+    if legacy:
+        print("[WARN] Legacy root entries accepted for patch compatibility: " + ", ".join(legacy))
     print("[OK] Clean organized project root (repository metadata ignored)")
 
 
@@ -557,16 +587,17 @@ def check_product_contract_tests() -> None:
         "tarneeb_400", "syrian_tarneeb", "trix_complex", "saudi_hand",
         "hand_partner", "trix_partner", "tarneeb_41", "tarneeb_61",
         "pinochle", "solitaire_multiplayer", "domino", "backgammon",
+        "jackaroo", "leekha",
     }
-    if set(keys) != expected or len(keys) != 18:
-        fail(f"Current audited 18-game contract changed unexpectedly: {keys}")
+    if set(keys) != expected or len(keys) != 20:
+        fail(f"Current audited 20-game contract changed unexpectedly: {keys}")
 
     require("backend-laravel/tests/Feature/V122CatalogAndEnginesTest.php", [
         "$this->assertSame($expected,$actual);",
         "EngineRegistry::PRODUCT_KEYS",
     ])
     require("backend-laravel/tests/Feature/V131PremiumFinalFixesTest.php", [
-        "assertCount(18,GameCatalog::all())",
+        "assertCount(20,GameCatalog::all())",
     ])
     require("backend-laravel/tests/Feature/V128StoreGameplayNavTest.php", [
         "assertCount(140,$service->tableSkins())",
@@ -591,7 +622,7 @@ def check_product_contract_tests() -> None:
     for rel, needle in stale_patterns:
         if needle in read(rel):
             fail(f"Stale historical test contract remains in {rel}: {needle}")
-    print("[OK] Current audited 18-game, 140-table (50 legacy + 40 v172 + 50 v173), 40-card-back product contract")
+    print("[OK] Current audited 20-game, 140-table (50 legacy + 40 v172 + 50 v173), 40-card-back product contract")
 
 
 def check_release_and_wallet_regressions() -> None:
@@ -1381,7 +1412,7 @@ def check_v186_engine_integrity_contract() -> None:
         stderr=subprocess.STDOUT,
     )
     if result.returncode != 0:
-        fail("Warqna v186 18-engine contract failed: " + result.stdout.strip())
+        fail("Warqna v186+ engine contract failed: " + result.stdout.strip())
     for rel in [
         ".github/workflows/flutter-web-pages.yml",
         ".github/workflows/flutter-android.yml",
@@ -1391,7 +1422,28 @@ def check_v186_engine_integrity_contract() -> None:
         require(rel, ["test_v186_engine_integrity_contract.py"])
     require(".github/workflows/backend-ci.yml", ["test-v186-engine-integrity.php"])
     print(result.stdout.strip())
-    print("[OK] v186 exact 18-game engine, fail-closed, privacy and concurrency contract")
+    print("[OK] v186 base plus v187 20-game engine, fail-closed, privacy and concurrency contract")
+
+def check_v187_global_offline_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/test_v187_global_offline_contract.py")],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        fail("Warqna v187 global/offline contract failed: " + result.stdout.strip())
+    for rel in [
+        ".github/workflows/flutter-web-pages.yml",
+        ".github/workflows/flutter-android.yml",
+        ".github/workflows/flutter-ios.yml",
+        ".github/workflows/production-release-check.yml",
+    ]:
+        require(rel, ["test_v187_global_offline_contract.py"])
+    require(".github/workflows/backend-ci.yml", ["test_v187_global_offline_contract.py"])
+    print(result.stdout.strip())
+    print("[OK] v187 all-game offline routing, rummy organization, new engines and admin-health contract")
 
 def check_v02_daily_prize_boxes_contract() -> None:
     result = subprocess.run(
@@ -1465,6 +1517,7 @@ def main() -> None:
     check_v184_official_game_rules_contract()
     check_v185_world_class_contract()
     check_v186_engine_integrity_contract()
+    check_v187_global_offline_contract()
     check_secrets()
     check_dart_structure()
     print(f"[PASS] Warqna v{EXPECTED_BUILD} source-package preflight completed successfully")

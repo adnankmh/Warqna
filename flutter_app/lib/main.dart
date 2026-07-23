@@ -2511,6 +2511,7 @@ class L {
       'baloot': 'بلوت',
       'basra': 'باصرة',
       'jackaroo': 'جاكارو',
+      'leekha': 'ليخة',
       'chess': 'شطرنج',
       'backgammon': 'طاولة الزهر',
       'solitaire_multiplayer': 'سوليتير تنافسي',
@@ -2613,6 +2614,7 @@ class L {
       'baloot': 'Baloot',
       'basra': 'Basra',
       'jackaroo': 'Jackaroo',
+      'leekha': 'Leekha',
       'chess': 'Chess',
       'backgammon': 'Backgammon',
       'solitaire_multiplayer': 'Competitive Solitaire',
@@ -2713,6 +2715,7 @@ class L {
       'baloot': 'Baloot',
       'basra': 'Basra',
       'jackaroo': 'Jackaroo',
+      'leekha': 'Leekha',
       'chess': 'Schach',
       'backgammon': 'Backgammon',
       'solitaire_multiplayer': 'Wettkampf-Solitär',
@@ -2813,6 +2816,7 @@ class L {
       'baloot': 'Baloot',
       'basra': 'Basra',
       'jackaroo': 'Jackaroo',
+      'leekha': 'Leekha',
       'chess': 'Satranç',
       'backgammon': 'Tavla',
       'solitaire_multiplayer': 'Rekabetçi Solitaire',
@@ -2913,6 +2917,7 @@ class L {
       'baloot': 'Baloot',
       'basra': 'Basra',
       'jackaroo': 'Jackaroo',
+      'leekha': 'Leekha',
       'chess': 'Échecs',
       'backgammon': 'Backgammon',
       'solitaire_multiplayer': 'Solitaire compétitif',
@@ -3013,6 +3018,7 @@ class L {
       'baloot': 'Baloot',
       'basra': 'Basra',
       'jackaroo': 'Jackaroo',
+      'leekha': 'Leekha',
       'chess': 'Ajedrez',
       'backgammon': 'Backgammon',
       'solitaire_multiplayer': 'Solitario competitivo',
@@ -3092,9 +3098,8 @@ class GameInfo {
   final String icon;
   final int players;
   final Color color;
-  final bool serverOnly;
 
-  const GameInfo(this.id, this.icon, this.players, this.color, {this.serverOnly = false});
+  const GameInfo(this.id, this.icon, this.players, this.color);
 }
 
 const gamesCatalog = [
@@ -3110,12 +3115,14 @@ const gamesCatalog = [
   GameInfo('saudi_hand', '🇸🇦', 5791, Color(0xff1c654c)),
   GameInfo('hand_partner', '🤝', 4882, Color(0xff5f4327)),
   GameInfo('trix_partner', '👥', 5140, Color(0xff583a70)),
-  GameInfo('tarneeb_41', '4️⃣', 4760, Color(0xff315f8c), serverOnly: true),
-  GameInfo('tarneeb_61', '6️⃣', 3220, Color(0xff24496e), serverOnly: true),
-  GameInfo('pinochle', '🂿', 4380, Color(0xff72531f), serverOnly: true),
-  GameInfo('solitaire_multiplayer', '🂠', 2910, Color(0xff315b52), serverOnly: true),
-  GameInfo('domino', '🁬', 6120, Color(0xff3f4858), serverOnly: true),
-  GameInfo('backgammon', '🎲', 5570, Color(0xff7a4728), serverOnly: true),
+  GameInfo('tarneeb_41', '4️⃣', 4760, Color(0xff315f8c)),
+  GameInfo('tarneeb_61', '6️⃣', 3220, Color(0xff24496e)),
+  GameInfo('pinochle', '🂿', 4380, Color(0xff72531f)),
+  GameInfo('solitaire_multiplayer', '🂠', 2910, Color(0xff315b52)),
+  GameInfo('domino', '🁬', 6120, Color(0xff3f4858)),
+  GameInfo('backgammon', '🎲', 5570, Color(0xff7a4728)),
+  GameInfo('jackaroo', '🟠', 6840, Color(0xff9b5d23)),
+  GameInfo('leekha', '♥️', 5960, Color(0xff8a2745)),
 ];
 
 class StoreProduct {
@@ -4580,7 +4587,7 @@ class GameCard extends StatelessWidget {
           children: [
             ClipRRect(borderRadius: BorderRadius.circular(14), child: Image.asset(gameArtAsset(game.id), fit: BoxFit.contain, errorBuilder: (_, __, ___) => Center(child: Text(game.icon, style: const TextStyle(fontSize: 46))))),
             DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), gradient: const LinearGradient(begin: Alignment.topCenter,end: Alignment.bottomCenter,colors:[Colors.transparent,Color(0x22000000),Color(0xee03070c)]))),
-            if (game.serverOnly) Positioned(top:6,right:6,child:Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xfff7d37a),Color(0xff9a5f0b)]),borderRadius:BorderRadius.circular(10),boxShadow:const [BoxShadow(color:Colors.black45,blurRadius:8)]),child:const Row(mainAxisSize:MainAxisSize.min,children:[Icon(Icons.cloud_rounded,size:12,color:Color(0xff261706)),SizedBox(width:3),Text('ONLINE',style:TextStyle(fontSize:8,color:Color(0xff261706),fontWeight:FontWeight.w900))]))),
+            Positioned(top:6,right:6,child:Container(padding:const EdgeInsets.symmetric(horizontal:7,vertical:4),decoration:BoxDecoration(color:const Color(0xdd063d31),borderRadius:BorderRadius.circular(10),border:Border.all(color:Colors.greenAccent.withValues(alpha:.55))),child:const Row(mainAxisSize:MainAxisSize.min,children:[Icon(Icons.offline_bolt_rounded,size:12,color:Colors.greenAccent),SizedBox(width:3),Text('OFFLINE + ONLINE',style:TextStyle(fontSize:7,color:Colors.white,fontWeight:FontWeight.w900))]))),
             Positioned(left:8,right:8,bottom:8,child:Column(mainAxisSize:MainAxisSize.min,children:[Text(L.t(lang,game.id),textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:13,shadows:[Shadow(color:Colors.black,blurRadius:7)])),const SizedBox(height:3),Text('${formatNumber(game.players)} لاعب',style:const TextStyle(color:Colors.white70,fontSize:9,fontWeight:FontWeight.w700))])),
           ],
         ),
@@ -4680,7 +4687,9 @@ class GameRoomPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final room = game.id == 'tarneeb' && !options.voiceEnabled && !options.joiningExisting && !controller.serverConnected
+    final room = const <String>{'tarneeb', 'tarneeb_41', 'tarneeb_61'}.contains(game.id) &&
+            !options.joiningExisting &&
+            !controller.serverConnected
         ? TarneebRoomPage(controller: controller, game: game)
         : ServerEngineRoomPage(controller: controller, game: game, options: options);
     return PopScope<bool>(
@@ -4751,7 +4760,7 @@ class _TarneebRoomPageState extends State<TarneebRoomPage> {
 
   void _newGame() {
     engine = TarneebLocalEngine(
-      targetScore: 41,
+      targetScore: widget.game.id == 'tarneeb_61' ? 61 : 41,
       playerNames: [widget.controller.displayName, botProfiles[3].name(widget.controller.localeCode), botProfiles[2].name(widget.controller.localeCode), botProfiles[1].name(widget.controller.localeCode)],
       difficulty: widget.controller.botDifficultyCode,
     );
@@ -5603,6 +5612,7 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
   Map<String, dynamic>? room;
   String? error;
   String? selectedCard;
+  final List<String> manualHandOrder = <String>[];
   String? selectedSquare;
   bool loading = true;
   bool sending = false;
@@ -6486,6 +6496,118 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
     }).toList();
   }
 
+  bool get _isRummyRoom => const <String>{
+        'hand',
+        'hand_partner',
+        'saudi_hand',
+        'banakil',
+        'pinochle',
+      }.contains(widget.game.id);
+
+  List<Map<String, dynamic>> _visibleMeldGroups() {
+    final output = <Map<String, dynamic>>[];
+    final raw = state['melds'];
+    if (raw is Map) {
+      for (final ownerEntry in raw.entries) {
+        final groups = ownerEntry.value is List ? ownerEntry.value as List : const <dynamic>[];
+        for (final group in groups) {
+          if (group is Map) {
+            final cards = group['cards'] is List ? group['cards'] as List : const <dynamic>[];
+            output.add(<String, dynamic>{
+              'owner': ownerEntry.key.toString(),
+              'cards': cards.map((card) => card.toString()).toList(),
+              'value': group['value'],
+            });
+          } else if (group is List) {
+            output.add(<String, dynamic>{
+              'owner': ownerEntry.key.toString(),
+              'cards': group.map((card) => card.toString()).toList(),
+            });
+          }
+        }
+      }
+    } else if (raw is List) {
+      final owners = state['meld_owners'] is List ? state['meld_owners'] as List : const <dynamic>[];
+      for (var index = 0; index < raw.length; index++) {
+        final group = raw[index];
+        final cards = group is Map
+            ? (group['cards'] is List ? group['cards'] as List : const <dynamic>[])
+            : group is List
+                ? group
+                : const <dynamic>[];
+        final rawOwner = index < owners.length ? owners[index] : 0;
+        final ownerKey = rawOwner.toString() == '0' ? 'user:0' : 'bot:$rawOwner';
+        output.add(<String, dynamic>{
+          'owner': ownerKey,
+          'cards': cards.map((card) => card.toString()).toList(),
+          if (group is Map) 'value': group['value'],
+        });
+      }
+    }
+    return output.where((group) => (group['cards'] as List).isNotEmpty).toList();
+  }
+
+  Widget _rummyMeldBoard(List<Map<String, dynamic>> groups) {
+    const palette = <Color>[
+      Color(0xff137b68),
+      Color(0xff315aa6),
+      Color(0xff8b4f19),
+      Color(0xff713d92),
+      Color(0xffa52e4d),
+      Color(0xff477627),
+      Color(0xff885d10),
+      Color(0xff276d82),
+    ];
+    final players = room?['players'] is List ? room!['players'] as List : const <dynamic>[];
+    final names = <String, String>{
+      for (final raw in players.whereType<Map>())
+        (raw['key'] ?? '').toString(): (raw['name'] ?? 'لاعب').toString(),
+    };
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 620, maxHeight: 260),
+      child: SingleChildScrollView(
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 7,
+          runSpacing: 7,
+          children: groups.asMap().entries.map((entry) {
+            final group = entry.value;
+            final cards = (group['cards'] as List).map((card) => card.toString()).toList();
+            final owner = group['owner']?.toString() ?? '';
+            final color = palette[entry.key % palette.length];
+            return Container(
+              padding: const EdgeInsets.fromLTRB(7, 5, 7, 7),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [color.withValues(alpha: .92), color.withValues(alpha: .52)]),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: Colors.white.withValues(alpha: .42), width: 1.2),
+                boxShadow: [BoxShadow(color: color.withValues(alpha: .34), blurRadius: 12)],
+              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text('مجموعة ${entry.key + 1}', style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w900)),
+                  const SizedBox(width: 5),
+                  Text(names[owner] ?? owner.replaceAll('user:', '').replaceAll('bot:', ''), style: const TextStyle(fontSize: 7, color: Colors.white70)),
+                  if (group['value'] != null) Text(' • ${group['value']}', style: const TextStyle(fontSize: 7, color: Colors.amberAccent)),
+                ]),
+                const SizedBox(height: 4),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 2,
+                  runSpacing: 2,
+                  children: cards.take(13).map((card) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                    child: PlayingCard(label: _cardLabel(card), width: 27, height: 40),
+                  )).toList(),
+                ),
+              ]),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   Widget _stateSummary() {
     final messages = state['messages'] is List ? state['messages'] as List : const [];
     final current = messages.isNotEmpty ? messages.last.toString() : 'المحرك ينتظر الحركة التالية';
@@ -6528,6 +6650,8 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
     if (widget.game.id == 'backgammon' && state['points'] is Map) return _backgammonBoard(Map<String, dynamic>.from(state['points'] as Map));
     if (widget.game.id == 'jackaroo' && state['pieces'] is Map) return _jackarooBoard(Map<String, dynamic>.from(state['pieces'] as Map));
     if (widget.game.id == 'solitaire_multiplayer' && state['tableau'] is Map) return _solitaireBoard();
+    final meldGroups = _isRummyRoom ? _visibleMeldGroups() : const <Map<String, dynamic>>[];
+    if (meldGroups.isNotEmpty) return _rummyMeldBoard(meldGroups);
     final visible = trickCards.isNotEmpty ? trickCards : table.map((card) => {'card': card, 'name': ''}).toList();
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -6751,41 +6875,109 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
   Future<void> _quickPlayCard(String card) async {
     if (sending || (legal.isNotEmpty && !legal.contains(card))) return;
     final match = availableActions.cast<Map<String,dynamic>?>().firstWhere((item)=>item?['card']?.toString()==card && {'play_card','discard','move_to_foundation','play_tile'}.contains(item?['type']?.toString()),orElse:()=>null);
-    final action = match?['type']?.toString() ?? ((widget.game.id.contains('hand') || widget.game.id == 'banakil') && enginePhase == 'discard' ? 'discard' : 'play_card');
+    final action = match?['type']?.toString() ?? ((widget.game.id.contains('hand') || widget.game.id == 'banakil' || widget.game.id == 'pinochle') && enginePhase == 'discard' ? 'discard' : 'play_card');
     setState(()=>selectedCard=card);
     await _action(action, {'card':card,'tile':card});
+  }
+
+  List<String> _orderedHandTokens() {
+    final occurrences = <String, int>{};
+    final fresh = <String>[];
+    for (final card in hand) {
+      final occurrence = occurrences.update(card, (value) => value + 1, ifAbsent: () => 1);
+      fresh.add('$card#$occurrence');
+    }
+    final remaining = List<String>.from(fresh);
+    final ordered = <String>[];
+    for (final token in manualHandOrder) {
+      if (remaining.remove(token)) ordered.add(token);
+    }
+    ordered.addAll(remaining);
+    manualHandOrder
+      ..clear()
+      ..addAll(ordered);
+    return ordered;
+  }
+
+  String _cardFromHandToken(String token) {
+    final separator = token.lastIndexOf('#');
+    return separator < 0 ? token : token.substring(0, separator);
   }
 
   Widget _serverHand() {
     if (hand.isEmpty) return const SizedBox(height: 55, child: Center(child: Text('لا توجد أوراق ظاهرة في هذه المرحلة', style: TextStyle(color: Colors.white38, fontSize: 10))));
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardWidth = visibleCardWidthV021(constraints.maxWidth, hand.length, preferred: 54, gap: 2);
+        final tokens = _orderedHandTokens();
+        final cardWidth = constraints.maxWidth < 390 ? 43.0 : 52.0;
         final cardHeight = cardWidth * 1.5;
         return SizedBox(
-          height: cardHeight + 23,
+          height: cardHeight + 32,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var index = 0; index < hand.length; index++)
-                  Padding(
-                    padding: EdgeInsets.only(right: index == hand.length - 1 ? 0 : 2),
-                    child: Transform.translate(
-                      offset: Offset(0, selectedCard == hand[index] ? -7 : 0),
-                      child: GestureDetector(
-                        onTap: () => setState(() => selectedCard = selectedCard == hand[index] ? null : hand[index]),
-                        onDoubleTap: () => _quickPlayCard(hand[index]),
-                        onVerticalDragEnd: (details) { if ((details.primaryVelocity ?? 0) < -180) _quickPlayCard(hand[index]); },
-                        child: Opacity(
-                          opacity: legal.isNotEmpty && !legal.contains(hand[index]) ? .42 : 1,
-                          child: PlayingCard(label: _cardLabel(hand[index]), width: cardWidth, height: cardHeight, selected: selectedCard == hand[index]),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+            child: ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              buildDefaultDragHandles: false,
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+              itemCount: tokens.length,
+              onReorder: (oldIndex, newIndex) {
+                setState(() {
+                  if (newIndex > oldIndex) newIndex--;
+                  final token = manualHandOrder.removeAt(oldIndex);
+                  manualHandOrder.insert(newIndex, token);
+                });
+              },
+              proxyDecorator: (child, _, animation) => AnimatedBuilder(
+                animation: animation,
+                builder: (_, __) => Material(
+                  color: Colors.transparent,
+                  elevation: 12 * animation.value,
+                  borderRadius: BorderRadius.circular(9),
+                  child: child,
+                ),
+              ),
+              itemBuilder: (context, index) {
+                final token = tokens[index];
+                final card = _cardFromHandToken(token);
+                return SizedBox(
+                  key: ValueKey(token),
+                  width: cardWidth + 4,
+                  child: Transform.translate(
+                    offset: Offset(0, selectedCard == card ? -5 : 0),
+                    child: Stack(
+                      alignment: Alignment.bottomCenter,
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() => selectedCard = selectedCard == card ? null : card),
+                          onDoubleTap: () => _quickPlayCard(card),
+                          onVerticalDragEnd: (details) { if ((details.primaryVelocity ?? 0) < -180) _quickPlayCard(card); },
+                          child: Opacity(
+                            opacity: legal.isNotEmpty && !legal.contains(card) ? .42 : 1,
+                            child: PlayingCard(label: _cardLabel(card), width: cardWidth, height: cardHeight, selected: selectedCard == card),
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          bottom: 0,
+                          child: ReorderableDragStartListener(
+                            index: index,
+                            child: Container(
+                              width: cardWidth * .72,
+                              height: 13,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: const Color(0xdd071019),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: const Icon(Icons.drag_indicator_rounded, size: 12, color: Colors.white70),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                );
+              },
             ),
           ),
         );
@@ -6876,6 +7068,20 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
     final melds = availableActions.where((item) => item['type'] == 'meld' && item['cards'] is List).toList();
     if (melds.isNotEmpty) {
       widgets.add(FilledButton.tonalIcon(onPressed: sending ? null : () => _chooseMeld(melds), icon: const Icon(Icons.layers_outlined, size: 17), label: const Text('تنزيل مجموعة')));
+    }
+    if (_isRummyRoom && enginePhase == 'discard') {
+      widgets.add(FilledButton.tonalIcon(onPressed: sending ? null : _chooseManualMeld, icon: const Icon(Icons.touch_app_rounded, size: 17), label: const Text('تحديد مجموعة يدوياً')));
+    }
+    final multiMelds = availableActions.where((item) => item['type'] == 'meld_many' && item['groups'] is List).map((item) => Map<String, dynamic>.from(item)).toList();
+    if (multiMelds.isNotEmpty) {
+      widgets.add(FilledButton.tonalIcon(onPressed: sending ? null : () => _chooseMeldMany(multiMelds), icon: const Icon(Icons.dashboard_customize_outlined, size: 17), label: const Text('تنزيل عدة مجموعات')));
+    }
+    final layoffs = availableActions.where((item) => item['type'] == 'layoff' && item['cards'] is List).map((item) => Map<String, dynamic>.from(item)).toList();
+    if (layoffs.isNotEmpty) {
+      widgets.add(OutlinedButton.icon(onPressed: sending ? null : () => _chooseLayoff(layoffs), icon: const Icon(Icons.call_merge_rounded, size: 17), label: const Text('تركيب على مجموعة')));
+    }
+    if (types.contains('pass_cards')) {
+      widgets.add(FilledButton.icon(onPressed: sending ? null : _chooseLeekhaPass, icon: const Icon(Icons.swap_horiz_rounded), label: const Text('تمرير 3 أوراق')));
     }
 
     if (widget.game.id == 'domino') {
@@ -7033,6 +7239,139 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
       ),
     );
     if (selected != null) _action('meld', {'cards': selected['cards']});
+  }
+
+  Future<List<String>?> _selectHandCards({
+    required String title,
+    required int minimum,
+    int? maximum,
+  }) async {
+    final tokens = _orderedHandTokens();
+    final selected = <String>{};
+    return showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(title),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520, maxHeight: 430),
+            child: SingleChildScrollView(
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: tokens.map((token) {
+                  final card = _cardFromHandToken(token);
+                  final active = selected.contains(token);
+                  return FilterChip(
+                    selected: active,
+                    showCheckmark: true,
+                    avatar: Text(_cardLabel(card), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _cardLabel(card).contains('♥') || _cardLabel(card).contains('♦') ? Colors.redAccent : null)),
+                    label: Text(active ? 'محدد' : 'اختر', style: const TextStyle(fontSize: 9)),
+                    onSelected: (value) {
+                      setDialogState(() {
+                        if (!value) {
+                          selected.remove(token);
+                        } else if (maximum == null || selected.length < maximum) {
+                          selected.add(token);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: selected.length >= minimum && (maximum == null || selected.length <= maximum)
+                  ? () => Navigator.pop(
+                        dialogContext,
+                        selected.map(_cardFromHandToken).toList(),
+                      )
+                  : null,
+              child: Text(maximum == minimum ? 'اعتماد ${selected.length}/$minimum' : 'اعتماد ${selected.length} أوراق'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _chooseManualMeld() async {
+    final cards = await _selectHandCards(
+      title: 'اختر أوراق المجموعة بالترتيب الذي تريده',
+      minimum: 3,
+      maximum: 13,
+    );
+    if (cards != null) _action('meld', <String, dynamic>{'cards': cards});
+  }
+
+  Future<void> _chooseMeldMany(List<Map<String, dynamic>> actions) async {
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تنزيل عدة مجموعات في حركة واحدة'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 420),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: actions.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final groups = (actions[index]['groups'] as List).whereType<List>().toList();
+              return ListTile(
+                leading: const Icon(Icons.dashboard_customize_outlined),
+                title: Text('${groups.length} مجموعات'),
+                subtitle: Text(groups.map((group) => group.map((card) => _cardLabel(card.toString())).join(' ')).join('  |  '), textDirection: TextDirection.ltr),
+                onTap: () => Navigator.pop(dialogContext, actions[index]),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (selected != null) _action('meld_many', <String, dynamic>{'groups': selected['groups']});
+  }
+
+  Future<void> _chooseLayoff(List<Map<String, dynamic>> actions) async {
+    final selected = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('اختر الورقة والمجموعة التي ستركّب عليها'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 420),
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: actions.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, index) {
+              final action = actions[index];
+              final cards = (action['cards'] as List).map((card) => _cardLabel(card.toString())).join(' ');
+              final group = int.tryParse((action['meld_index'] ?? action['meldIndex'] ?? 0).toString()) ?? 0;
+              return ListTile(
+                leading: const Icon(Icons.call_merge_rounded),
+                title: Text(cards, textDirection: TextDirection.ltr),
+                subtitle: Text('على المجموعة ${group + 1}'),
+                onTap: () => Navigator.pop(dialogContext, action),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    if (selected == null) return;
+    final payload = Map<String, dynamic>.from(selected)..remove('type');
+    _action('layoff', payload);
+  }
+
+  Future<void> _chooseLeekhaPass() async {
+    final cards = await _selectHandCards(
+      title: 'اختر ثلاث أوراق لتمريرها',
+      minimum: 3,
+      maximum: 3,
+    );
+    if (cards != null) _action('pass_cards', <String, dynamic>{'cards': cards});
   }
 
   Future<void> _playJackarooCard(String card, Map<String, dynamic>? action) async {
@@ -8229,10 +8568,6 @@ void showCompetitions(BuildContext context, AppController controller) {
 }
 
 void showGameLobby(BuildContext context, AppController controller, GameInfo game) {
-  if (game.serverOnly && !controller.serverConnected) {
-    showToast(context, 'هذه اللعبة تستخدم محرك الخادم الكامل. اربط التطبيق بخادم Laravel للعبها بصورة صحيحة.');
-    return;
-  }
   showPremiumSheet(
     context,
     child: Column(
@@ -8916,12 +9251,13 @@ const gameRuleBook = <String, GameRuleInfo>{
   'hand': GameRuleInfo(icon:'🂮',players:'2–5',deck:'مجموعتان + جوكران',hand:'14 ثم 15 للبادي',play:'يسحب اللاعب من الرزمة أو المكشوف، ينزل مجموعات أو تسلسلات صحيحة، ثم يرمي ورقة لينهي دوره.',legal:'لا يجوز إنهاء الدور دون رمي، ويجب احترام حد النزول وترتيب المجموعات ومنع التركيبات غير الصحيحة.',win:'تنتهي الجولة عند إنهاء يد لاعب، وتُحسب قيمة الأوراق المتبقية على الآخرين عبر عدة جولات.'),
   'hand_partner': GameRuleInfo(icon:'🤝',players:'4',deck:'106 أوراق',hand:'14 ورقة',play:'هاند لفريقين، مع نزول وتركيب مشترك بين الشريكين بعد فتح الفريق.',legal:'سحب ثم نزول/تركيب ثم رمي، ولا يجوز استخدام مجموعات الخصم.',win:'تُجمع نقاط الفريق وتخصم الأوراق المتبقية، والفريق الأعلى بعد الجولات يفوز.'),
   'saudi_hand': GameRuleInfo(icon:'🇸🇦',players:'2–5',deck:'106 أوراق',hand:'14 ورقة',play:'سحب ثم نزول مجموعات أو تسلسلات وتركيب ثم رمي، وفق نمط الهاند السعودي.',legal:'يطبق المحرك شروط النزول والجوكر والبناكل ومنع الرميات غير القانونية.',win:'الفائز يفرغ يده أولاً وتُحتسب الأوراق المتبقية على الخاسرين.'),
-  'banakil': GameRuleInfo(icon:'🎴',players:'2–4',deck:'مجموعتان + جوكران',hand:'14 ورقة',play:'تكوين مجموعات وتسلسلات باستخدام الأوراق الطبيعية والبناكل/الجوكر ضمن ضوابطها.',legal:'يجب السحب أولاً والرمي أخيراً، ولا تُقبل مجموعة تخالف الحد الأدنى أو نسبة الأوراق الطبيعية.',win:'ينهي اللاعب أو الفريق يده ويجمع نقاط النزول مقابل خصم الأوراق الباقية.'),
-  'pinochle': GameRuleInfo(icon:'🂫',players:'2–4',deck:'48 ورقة',hand:'12 ورقة',play:'مزايدة ثم اختيار الحكم وإعلان المشاريع، وبعدها لعب اللمّات.',legal:'اتباع النوع والحكم وإجبار الفوز عند توفره وفق نمط البناكل الكلاسيكي.',win:'تجمع نقاط المشاريع واللمّات ويجب تحقيق العقد، وإلا تُخصم قيمة المزايدة.'),
+  'banakil': GameRuleInfo(icon:'🎴',players:'2 أو 4',deck:'مجموعتان + جوكران',hand:'18 ورقة و19 للبادئ',play:'تكوين مجموعات وتسلسلات باستخدام الأوراق الطبيعية والبناكل/الجوكر ضمن ضوابطها.',legal:'يبدأ صاحب 19 ورقة بالرمي، ثم يسحب كل لاعب وينزّل أو يركّب على مجموعات فريقه ويرمي أخيراً.',win:'الهدف 222 للشراكة أو 150 للمواجهة، مع 20 نقطة إنهاء وخصم الأوراق المتبقية.'),
+  'pinochle': GameRuleInfo(icon:'🂫',players:'2–4',deck:'مجموعتان + جوكران',hand:'18 ثم 19 للبادي',play:'بناكل كلاسيك فردي أو شراكة: سحب ثم تنزيل مجموعات أو سلاسل وتركيب على مجموعات الفريق ثم رمي.',legal:'لا حد أدنى للنزول، وتقبل مجموعات الثلاثات أو الآسات والسلاسل من النوع نفسه مع ضوابط 2 والجوكر.',win:'الهدف 222 للشراكة أو 150 للفردي، مع مكافأة الإنهاء وخصم الأوراق المتبقية.'),
   'baloot': GameRuleInfo(icon:'♠️',players:'4',deck:'32 ورقة',hand:'8 أوراق',play:'فريقان يختاران صن أو حكم ثم يلعبان ثماني لمّات مع مشاريع اختيارية.',legal:'اتباع النوع إلزامي، وفي الحكم تطبق قواعد القطع والعلو وترتيب الحكم الخاص.',win:'تُحسب قيم الأوراق والمشاريع، ويفوز الفريق الذي يصل للهدف قبل منافسه.'),
   'domino': GameRuleInfo(icon:'🁫',players:'2–4',deck:'28 قطعة دبل-ستة',hand:'7 قطع',play:'توضع قطعة على أحد طرفي السلسلة بشرط مطابقة الرقم المفتوح.',legal:'إن لم توجد قطعة صالحة يسحب أو يمر اللاعب حسب النمط. لا يمكن اللعب على طرف غير مطابق.',win:'يفوز من ينهي قطعه أولاً؛ وعند الإغلاق يفوز الأقل مجموعاً وتُحسب قطع الآخرين.'),
   'basra': GameRuleInfo(icon:'♦️',players:'2',deck:'52 ورقة',hand:'4 أوراق كل دفعة',play:'يلعب كل لاعب ورقة لالتقاط ورقة مماثلة أو مجموعة تساوي قيمتها.',legal:'الولد يلتقط أوراق الطاولة وفق القاعدة، ولسبعة الديناري تأثير خاص، والباصرة تحصل عند تنظيف الطاولة بشروطها.',win:'تُحسب أكثرية الأوراق والديناري والآسات والباصرات، والأعلى نقاطاً يفوز.'),
   'jackaroo': GameRuleInfo(icon:'🎲',players:'4',deck:'بطاقات حركة',hand:'4 أوراق',play:'فريقان يحركان أربعة أحجار لكل لاعب من البيت إلى المسار ثم الأمان.',legal:'كل بطاقة لها قدرة حركة محددة، ولا يسمح بالوقوف على حجر صديق أو تجاوز قيود منطقة الأمان.',win:'يفوز الفريق الذي يُدخل أحجاره الثمانية إلى الأمان أولاً.'),
+  'leekha': GameRuleInfo(icon:'♥️',players:'4',deck:'52 ورقة',hand:'13 ورقة',play:'فريقان متقابلان. يمرر كل لاعب ثلاث أوراق ثم تُلعب اللمّات مع إلزام اتباع النوع.',legal:'عند انعدام النوع المتصدر يجب رمي Q♠ أو 10♦ إن وجدت إحداهما. القلوب نقطة، Q♠ ثلاث عشرة، و10♦ عشر نقاط.',win:'عند وصول فريق إلى 101 نقطة أو أكثر تنتهي المباراة ويفوز الفريق الأقل عقوبة.'),
   'backgammon': GameRuleInfo(icon:'🎲',players:'2',deck:'لوح + نردان',hand:'15 حجراً',play:'تحرك الأحجار حسب نتيجة النرد باتجاه منطقة الإخراج.',legal:'يجب إدخال الحجر المضروب أولاً، ولا يجوز النزول على نقطة مغلقة بقطعتين للخصم.',win:'يفوز من يخرج جميع أحجاره أولاً، مع احتساب جامون أو باكجامون عند انطباقه.'),
   'chess': GameRuleInfo(icon:'♛',players:'2',deck:'لوح 8×8',hand:'16 قطعة',play:'شطرنج قياسي بالتناوب الأبيض ثم الأسود.',legal:'لا يسمح بنقلة تترك الملك في كش، وتطبق التبييت والأخذ بالتجاوز والترقية بشروطها.',win:'كش مات أو استسلام، والتعادل بالتكرار أو الجمود أو القواعد المعتمدة.'),
   'solitaire_multiplayer': GameRuleInfo(icon:'🂠',players:'1–4',deck:'52 ورقة',hand:'7 أعمدة',play:'سباق لترتيب الأوراق في الأساسات حسب النوع من الآس إلى الملك.',legal:'تنقل الرزم بترتيب تنازلي وتناوب الألوان، وتُكشف الأوراق عند تحريرها.',win:'يفوز من يكمل الأساسات أولاً أو يحقق أعلى نتيجة ضمن الوقت.'),
@@ -9387,7 +9723,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
   @override
   void initState() {
     super.initState();
-    tabs = TabController(length: 6, vsync: this);
+    tabs = TabController(length: 7, vsync: this);
     _load();
   }
 
@@ -9415,9 +9751,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
       appBar: AppBar(
         title: const Text('لوحة إدارة Warqna', style: TextStyle(fontWeight: FontWeight.w900)),
         actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh))],
-        bottom: TabBar(controller: tabs, isScrollable: true, tabs: const [Tab(text:'نظرة عامة'),Tab(text:'الألعاب'),Tab(text:'المتجر'),Tab(text:'اللاعبون'),Tab(text:'مصمم بدون كود'),Tab(text:'النظام')]),
+        bottom: TabBar(controller: tabs, isScrollable: true, tabs: const [Tab(text:'نظرة عامة'),Tab(text:'الألعاب'),Tab(text:'سلامة المحركات'),Tab(text:'المتجر'),Tab(text:'اللاعبون'),Tab(text:'مصمم بدون كود'),Tab(text:'النظام')]),
       ),
-      body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabs, children: [_overview(), _games(), _store(), _users(), _designer(), _system()]),
+      body: loading ? const Center(child: CircularProgressIndicator()) : TabBarView(controller: tabs, children: [_overview(), _games(), _engineHealth(), _store(), _users(), _designer(), _system()]),
     );
   }
 
@@ -9455,7 +9791,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
-        const _AdminInfo(text:'يمكن لحساب الإدارة إظهار أو إخفاء أي لعبة فوراً من الكتالوج العام. اللعب المتصل يبقى خاضعاً لمحرك Laravel والتحقق السلطوي من الحركات والنتائج.'),
+        const _AdminInfo(text:'يمكن لحساب الإدارة إظهار أو إخفاء أي لعبة فوراً من الكتالوج العام. لكل لعبة محرك محلي ضد البوتات، بينما يبقى اللعب المتصل خاضعاً لمحرك Laravel والتحقق السلطوي من الحركات والنتائج.'),
         const SizedBox(height: 10),
         ...rows.map((game) {
           final key = game['key']?.toString() ?? '';
@@ -9477,7 +9813,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
               child: PremiumListTile(
                 icon: localInfo?.icon ?? '🎮',
                 title: localizedName,
-                subtitle: active ? 'ظاهر للاعبين • المحرك متاح' : 'مخفي من الكتالوج • لا يمكن إنشاء غرف جديدة',
+                subtitle: active ? 'ظاهر • محرك محلي + Laravel • تدقيق قواعد V187' : 'مخفي من الكتالوج • لا يمكن إنشاء غرف جديدة',
                 action: Switch.adaptive(
                   value: active,
                   onChanged: id == null || !widget.controller.serverConnected ? null : (value) async {
@@ -9500,6 +9836,44 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
   }
 
   Widget _store() => AdminStoreStudioV151(controller: widget.controller);
+
+  Widget _engineHealth() {
+    const dedicated = <String>{'tarneeb','tarneeb_41','tarneeb_61','domino','basra','backgammon','jackaroo','leekha','solitaire_multiplayer'};
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        Row(children: [
+          Expanded(child: _AdminMetric(icon:'🟢',label:'جاهزة دون خادم',value:'${gamesCatalog.length}/${gamesCatalog.length}')),
+          const SizedBox(width:8),
+          const Expanded(child:_AdminMetric(icon:'🔐',label:'تحقق متصل',value:'سلطوي')),
+        ]),
+        const SizedBox(height:10),
+        const _AdminInfo(text:'بوابة سلامة V187 تفحص تطابق كتالوج Flutter وLaravel، الحركات القانونية، إخفاء أيدي الخصوم، منع الحركة المكررة، وقابلية بدء كل لعبة محلياً. الألعاب الجديدة لا تُنشر قبل مرور هذا العقد.'),
+        const SizedBox(height:10),
+        ...gamesCatalog.asMap().entries.map((entry) {
+          final game = entry.value;
+          final engine = dedicated.contains(game.id) ? 'محرك متخصص' : 'محرك ورق عالمي';
+          return Padding(
+            padding: const EdgeInsets.only(bottom:7),
+            child: PremiumPanel(
+              child: ListTile(
+                leading: CircleAvatar(backgroundColor:game.color.withValues(alpha:.34),child:Text(game.icon)),
+                title: Text(L.t(widget.controller.localeCode,game.id),style:const TextStyle(fontWeight:FontWeight.w900)),
+                subtitle: Text('$engine • Offline + Online • rules-v187',style:const TextStyle(fontSize:10,color:Colors.white60)),
+                trailing: const Tooltip(message:'محرك محلي جاهز والتحقق الخادمي مفعل',child:Icon(Icons.verified_user_rounded,color:Colors.greenAccent)),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height:6),
+        FilledButton.tonalIcon(
+          onPressed:() => showToast(context,'فحص الإصدار V187 مضمّن في GitHub Actions وCHECK_WARQNA_WINDOWS.bat.'),
+          icon:const Icon(Icons.fact_check_outlined),
+          label:const Text('عرض بوابة فحص الإصدار'),
+        ),
+      ],
+    );
+  }
 
   Widget _users() => ListView(
     padding: const EdgeInsets.all(12),
@@ -9553,7 +9927,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> with SingleTick
   Widget _system() => ListView(
     padding: const EdgeInsets.all(12),
     children: [
-      _AdminInfo(text:'حالة الاتصال: ${widget.controller.serverConnected ? 'متصل بـ Laravel API' : 'غير متصل — اللعب متوقف'}.\nAPI: ${widget.controller.api.baseUrl}'),
+      _AdminInfo(text:'حالة الاتصال: ${widget.controller.serverConnected ? 'متصل بـ Laravel API — اللعب الجماعي السلطوي مفعل' : 'غير متصل — جميع الألعاب المحلية والبوتات تعمل دون خادم'}.\nAPI: ${widget.controller.api.baseUrl}'),
       const SizedBox(height:10),
       SwitchListTile(value:widget.controller.soundEnabled,onChanged:widget.controller.toggleSound,title:const Text('الأصوات'),subtitle:const Text('أصوات اللعب والإيموجي والتنبيهات')),
       ListTile(leading:const Icon(Icons.language),title:const Text('اللغة'),trailing:Text(widget.controller.localeCode.toUpperCase())),

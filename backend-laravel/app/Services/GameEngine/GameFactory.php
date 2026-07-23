@@ -19,6 +19,7 @@ class GameFactory
             'basra' => new BasraRules(),
             'backgammon' => new BackgammonRules(),
             'jackaroo' => new JackarooRules(),
+            'leekha' => new LeekhaRules(),
             'chess' => new ChessRules(),
 
             // Never silently downgrade an unknown product key to a permissive

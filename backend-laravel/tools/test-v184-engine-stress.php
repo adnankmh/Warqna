@@ -7,7 +7,7 @@ $base = dirname(__DIR__) . '/app/Services/GameEngine';
 require_once dirname(__DIR__) . '/app/Services/WarqnaPro/PlayActionNormalizer.php';
 foreach ([
     'GameRuleContract.php','Card.php','DeckFactory.php','AbstractCardRules.php',
-    'DominoRules.php','BasraRules.php','BackgammonRules.php','JackarooRules.php',
+    'DominoRules.php','BasraRules.php','BackgammonRules.php','JackarooRules.php','LeekhaRules.php',
     'ChessRules.php','TarneebRules.php','GlobalCardEngineRules.php',
     'UniversalSocialGameRules.php','EngineRegistry.php','GameFactory.php',
 ] as $file) require_once $base . '/' . $file;
@@ -50,6 +50,9 @@ foreach ($keys as $key) {
                     if ($type === '' || $type === 'wait') throw new RuntimeException('invalid first legal action');
                     $payload = $action;
                     unset($payload['type'], $payload['reason']);
+                    if ($type === 'pass_cards') {
+                        $payload['cards'] = array_slice($state['hands'][$turn] ?? [], 0, 3);
+                    }
                     if (!$rules->validate($state, $turn, $type, $payload)) {
                         throw new RuntimeException('advertised action failed validation: '.$type);
                     }
@@ -70,7 +73,7 @@ foreach ($keys as $key) {
     }
 }
 if ($errors) {
-    fwrite(STDERR, "\nEngine stress failures:\n- ".implode("\n- ",$errors)."\n");
+    file_put_contents('php://stderr', "\nEngine stress failures:\n- ".implode("\n- ",$errors)."\n");
     exit(1);
 }
 echo "\n[PASS] {$checks} engine stress scenarios completed without invalid state or legal-move failure.\n";
