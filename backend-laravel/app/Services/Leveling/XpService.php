@@ -1,14 +1,16 @@
 <?php
 namespace App\Services\Leveling;
 
-use App\Models\User;
+use App\Models\{CompetitionTicket, User};
 
 class XpService
 {
     public function levelForXp(int $xp): int
     {
         $level = 1;
-        while ($level < 100 && $xp >= $this->requiredXp($level)) {
+        $remaining = max(0, $xp);
+        while ($level < 200 && $remaining >= $this->requiredXp($level)) {
+            $remaining -= $this->requiredXp($level);
             $level++;
         }
         return $level;
@@ -16,9 +18,11 @@ class XpService
 
     public function requiredXp(int $level): int
     {
-        if ($level <= 10) return [1=>58,2=>87,3=>127,4=>173,5=>230,6=>299,7=>374,8=>460,9=>564,10=>690][$level] ?? 690;
-        if ($level <= 50) return (int) round(690 * pow(1.16, $level - 10) + ($level * 120));
-        return (int) round(90275 * pow(1.085, $level - 50) + ($level * 500));
+        $safe = max(1, min(200, $level));
+        $exact = config('warqna_xp_levels.'.$safe);
+        if ($exact !== null) return (int) $exact;
+        $level100 = (int) config('warqna_xp_levels.100', 8000000);
+        return (int) round($level100 * (1.12 ** ($safe - 100)));
     }
 
     public function rewardForLevel(int $level): int
@@ -31,28 +35,40 @@ class XpService
         };
     }
 
-    public function award(User $user, int $xp, int $tokens = 0, bool $win = false): array
+    public function award(User $user, int $xp, int $tokens = 0, bool $win = false, bool $countGame = true, bool $applyMultipliers = true): array
     {
         $profile = $user->profile;
         $wallet = $user->wallet;
         $oldLevel = (int) ($profile->level ?? 1);
         $booster = max(1, (float)($profile->xp_boost_multiplier ?? 1));
-        $pashaBoost = ((int)($profile->pasha_days ?? 0) > 0) ? 1.5 : 1.0;
-        $earnedXp = (int) round(max(0, $xp) * $booster * $pashaBoost);
+        $pashaBoost = ((int)($profile->pasha_days ?? 0) > 0) ? 2.0 : 1.0;
+        $earnedXp = $applyMultipliers ? (int) round(max(0, $xp) * $booster * $pashaBoost) : max(0, $xp);
         $profile->xp = (int) $profile->xp + $earnedXp;
         $newLevel = $this->levelForXp((int) $profile->xp);
         $bonus = 0;
+        $levelRewards = [];
         if ($newLevel > $oldLevel) {
-            for ($i = $oldLevel + 1; $i <= $newLevel; $i++) $bonus += $this->rewardForLevel($i);
+            for ($i = $oldLevel + 1; $i <= $newLevel; $i++) {
+                $tokensForLevel = $this->rewardForLevel($i);
+                $bonus += $tokensForLevel;
+                $pashaDays = $i % 5 === 0 ? ($i % 25 === 0 ? 3 : 1) : 0;
+                $ticket200 = $i % 10 === 0 ? 1 : 0;
+                if ($pashaDays > 0) $profile->pasha_days = (int)($profile->pasha_days ?? 0) + $pashaDays;
+                if ($ticket200 > 0) {
+                    $ticket = CompetitionTicket::firstOrCreate(['user_id'=>$user->id,'denomination'=>200],['quantity'=>0,'total_used'=>0]);
+                    $ticket->increment('quantity',$ticket200);
+                }
+                $levelRewards[] = ['level'=>$i,'tokens'=>$tokensForLevel,'pasha_days'=>$pashaDays,'ticket_200'=>$ticket200,'prize_box'=>$i % 3 === 0];
+            }
         }
         $profile->level = $newLevel;
-        $profile->games_played = (int) ($profile->games_played ?? 0) + 1;
-        $profile->wins = (int) ($profile->wins ?? 0) + ($win ? 1 : 0);
+        $profile->games_played = (int) ($profile->games_played ?? 0) + ($countGame ? 1 : 0);
+        $profile->wins = (int) ($profile->wins ?? 0) + (($countGame && $win) ? 1 : 0);
         $profile->save();
         if ($wallet) {
             $wallet->tokens += max(0, $tokens) + $bonus;
             $wallet->save();
         }
-        return ['old_level'=>$oldLevel,'new_level'=>$newLevel,'level_bonus'=>$bonus,'earned_xp'=>$earnedXp ?? $xp];
+        return ['old_level'=>$oldLevel,'new_level'=>$newLevel,'level_bonus'=>$bonus,'level_rewards'=>$levelRewards,'earned_xp'=>$earnedXp ?? $xp];
     }
 }

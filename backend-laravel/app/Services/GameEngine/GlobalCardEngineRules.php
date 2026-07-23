@@ -27,7 +27,7 @@ class GlobalCardEngineRules implements GameRuleContract
 
     public function initialState(array $players, array $options=[]): array
     {
-        $cfgPlayers=$this->playerCountFor($this->key);
+        $cfgPlayers=$this->playerCountFor($this->key, (int)($options['player_count'] ?? count($players)));
         $players=array_values(array_slice($players,0,$cfgPlayers));
         while(count($players)<$cfgPlayers) $players[]='bot:global_'.count($players);
         $enginePlayers=[];
@@ -54,8 +54,8 @@ class GlobalCardEngineRules implements GameRuleContract
                 if(isset($x['suit']) && isset($a['suit']) && $x['suit']!==$a['suit']) continue;
                 return true;
             }
-            // allow organize as helper in hand-like games
-            return (($a['type'] ?? '')==='organize');
+            // Structured helpers are validated authoritatively by the engine.
+            return in_array(($a['type'] ?? ''), ['organize', 'layoff', 'meld_many', 'pass_trix'], true);
         }catch(\Throwable $e){ return false; }
     }
 
@@ -88,6 +88,9 @@ class GlobalCardEngineRules implements GameRuleContract
             return array_values(array_map(function (array $action): array {
                 if (isset($action['card'])) $action['card'] = $this->toLongCard((string) $action['card']);
                 if (isset($action['cards']) && is_array($action['cards'])) $action['cards'] = $this->longCards($action['cards']);
+                if (isset($action['groups']) && is_array($action['groups'])) {
+                    $action['groups'] = array_map(fn($group) => $this->longCards((array)$group), $action['groups']);
+                }
                 if (isset($action['suit'])) $action['suit'] = $this->toLongSuit((string) $action['suit']);
                 return $action;
             }, $actions));
@@ -166,11 +169,9 @@ class GlobalCardEngineRules implements GameRuleContract
             'contract'=>$g['contract'] ?? null,
             'trick'=>$trick,
             'last_trick'=>$last,
-            'round_tricks'=>[
-                'teamA'=>(int)($g['tricksWon'][0] ?? 0),
-                'teamB'=>(int)($g['tricksWon'][1] ?? 0),
-            ],
+            'round_tricks'=>$this->roundTricks($g,$players),
             'score'=>$score,
+            'individual_scores'=>!empty($g['config']['individualScores']) ? ($g['scores'] ?? []) : null,
             'target'=>(int)($g['config']['targetScore'] ?? $this->defaultTarget($this->key)),
             'round'=>(int)($g['round'] ?? 1),
             'turn_timeout_seconds'=>max(5,min(10,(int)($g['config']['turnSeconds'] ?? 7))),
@@ -179,9 +180,14 @@ class GlobalCardEngineRules implements GameRuleContract
             'discard'=>$this->longDiscard($g['discard'] ?? []),
             'melds'=>$this->longMelds($g['melds'] ?? []),
             'tableau'=>$g['tableau'] ?? [],
+            'trix_board'=>$g['trixBoard'] ?? null,
+            'trix_finish_order'=>$g['trixFinishOrder'] ?? [],
+            'contracts_used'=>$g['contractsUsed'] ?? [],
             'foundation'=>$g['foundation'] ?? [],
             'legal_cards'=>[],
             'state_hash'=>$g['antiCheat']['lastHash'] ?? null,
+            'deal_commitment'=>$g['antiCheat']['dealCommitment'] ?? null,
+            'deal_reveal'=>!empty($g['gameOver']) ? ($g['seed'] ?? null) : null,
         ];
         if($phase==='finished'){
             $out['winner']=$g['winner'] ?? null;
@@ -202,6 +208,17 @@ class GlobalCardEngineRules implements GameRuleContract
             'draw_discard' => ['type'=>'draw_discard'],
             'discard' => ['type'=>'discard','card'=>$this->toShortCard($this->cardPayload($payload),$state['hands'][$playerId] ?? [])],
             'meld' => ['type'=>'meld','cards'=>array_map(fn($c)=>$this->toShortCard((string)$c,$state['hands'][$playerId] ?? []),(array)($payload['cards'] ?? []))],
+            'meld_many' => ['type'=>'meld_many','groups'=>array_map(
+                fn($group)=>array_map(fn($c)=>$this->toShortCard((string)$c,$state['hands'][$playerId] ?? []),(array)$group),
+                (array)($payload['groups'] ?? [])
+            )],
+            'pass_trix' => ['type'=>'pass_trix'],
+            'layoff','attach' => [
+                'type'=>'layoff',
+                'target_player'=>(string)($payload['target_player'] ?? $payload['targetPlayer'] ?? $playerId),
+                'meld_index'=>(int)($payload['meld_index'] ?? $payload['meldIndex'] ?? 0),
+                'cards'=>array_map(fn($c)=>$this->toShortCard((string)$c,$state['hands'][$playerId] ?? []),(array)($payload['cards'] ?? [])),
+            ],
             'organize' => ['type'=>'organize','strategy'=>'smart'],
             'draw_stock' => ['type'=>'draw_stock'],
             'move_to_foundation' => ['type'=>'move_to_foundation','card'=>$this->toShortCard($this->cardPayload($payload),$state['hands'][$playerId] ?? [])],
@@ -222,10 +239,18 @@ class GlobalCardEngineRules implements GameRuleContract
     }
 
     private function globalState(array $state): ?array { return isset($state['_global_engine']) && is_array($state['_global_engine']) ? $state['_global_engine'] : null; }
-    private function playerCountFor(string $key): int { return in_array($key,['hand','saudi_hand','banakil','pinochle','solitaire_multiplayer'],true) ? 4 : 4; }
-    private function defaultTarget(string $key): int { return match($key){'baloot'=>152,'tarneeb_400'=>400,default=>101}; }
+    private function playerCountFor(string $key, int $requested): int
+    {
+        return match($key) {
+            'hand','saudi_hand' => max(2, min(5, $requested)),
+            'banakil','pinochle' => $requested <= 2 ? 2 : 4,
+            'solitaire_multiplayer' => max(2, min(4, $requested)),
+            default => 4,
+        };
+    }
+    private function defaultTarget(string $key): int { return match($key){'baloot'=>152,'tarneeb_400'=>41,'banakil','pinochle'=>222,default=>101}; }
     private function gameType(): string { return match($this->key){'trix','trix_partner','trix_complex'=>'trix','hand','hand_partner','saudi_hand','banakil','pinochle','solitaire_multiplayer'=>'hand','baloot'=>'baloot','syrian_tarneeb','tarneeb_400'=>'tarneeb',default=>$this->key}; }
-    private function mapPhase(string $p): string { return match($p){'contract'=>'choose_contract','draw','discard'=>'playing',default=>$p}; }
+    private function mapPhase(string $p): string { return match($p){'contract'=>'choose_contract','trix_playing'=>'playing','draw','discard'=>'playing',default=>$p}; }
     private function cardPayload(array $p): string { $v=$p['card'] ?? $p['card_id'] ?? $p['id'] ?? $p['code'] ?? ''; return is_array($v) ? (string)($v['id'] ?? $v['card'] ?? '') : (string)$v; }
 
     private function toShortCard(string $card,array $hand=[]): string
@@ -248,7 +273,32 @@ class GlobalCardEngineRules implements GameRuleContract
     private function toLongSuit(string $s): string { $s=strtoupper(trim($s)); return match($s){'C'=>'clubs','D'=>'diamonds','S'=>'spades','H'=>'hearts',default=>strtolower($s)}; }
     private function teams(array $players): array { return ['teamA'=>array_values(array_filter([$players[0]??null,$players[2]??null])),'teamB'=>array_values(array_filter([$players[1]??null,$players[3]??null]))]; }
     private function teamOf(array $g,string $pid): string { foreach($g['players'] ?? [] as $p) if(($p['id'] ?? '')===$pid) return ((int)($p['team'] ?? 0))===0?'teamA':'teamB'; return 'teamA'; }
-    private function score(array $g,array $players): array { $s=$g['scores'] ?? []; return isset($s[0]) || isset($s[1]) ? ['teamA'=>(int)($s[0]??0),'teamB'=>(int)($s[1]??0)] : ['teamA'=>(int)($s[$players[0]??'']??0),'teamB'=>(int)($s[$players[1]??'']??0)]; }
+    private function score(array $g,array $players): array
+    {
+        $scores=$g['scores'] ?? [];
+        if (!empty($g['config']['individualScores'])) {
+            return [
+                'teamA'=>(float)($scores[$players[0] ?? ''] ?? 0)+(float)($scores[$players[2] ?? ''] ?? 0),
+                'teamB'=>(float)($scores[$players[1] ?? ''] ?? 0)+(float)($scores[$players[3] ?? ''] ?? 0),
+            ];
+        }
+        if (array_key_exists(0,$scores) || array_key_exists(1,$scores)) {
+            return ['teamA'=>$scores[0] ?? 0,'teamB'=>$scores[1] ?? 0];
+        }
+        return ['teamA'=>$scores[$players[0] ?? ''] ?? 0,'teamB'=>$scores[$players[1] ?? ''] ?? 0];
+    }
+
+    private function roundTricks(array $g,array $players): array
+    {
+        $tricks=$g['tricksWon'] ?? [];
+        if (!empty($g['config']['individualScores'])) {
+            return [
+                'teamA'=>(int)($tricks[$players[0] ?? ''] ?? 0)+(int)($tricks[$players[2] ?? ''] ?? 0),
+                'teamB'=>(int)($tricks[$players[1] ?? ''] ?? 0)+(int)($tricks[$players[3] ?? ''] ?? 0),
+            ];
+        }
+        return ['teamA'=>(int)($tricks[0] ?? 0),'teamB'=>(int)($tricks[1] ?? 0)];
+    }
     private function longDiscard(array $discard): array
     {
         return array_values(array_map(function ($item) {
@@ -277,10 +327,14 @@ class GlobalCardEngineRules implements GameRuleContract
                 'rummy.draw_discard'=>$name.' سحب الورقة المكشوفة.',
                 'rummy.discard'=>$name.' رمى ورقة.',
                 'rummy.meld'=>$name.' أنزل مجموعة قانونية.',
+                'rummy.meld_many'=>$name.' أنزل عدة مجموعات قانونية.',
+                'trix.card_played'=>$name.' ركّب ورقة في عقد تركس.',
+                'trix.pass'=>$name.' مرّر لعدم وجود ورقة قابلة للتركيب.',
+                'rummy.layoff'=>$name.' ركّب أوراقًا على مجموعة موجودة.',
                 default=>'• '.str_replace(['.','_'],' ',$type),
             };
         }return $out;
     }
-    private function arabicName(string $key): string { return ['syrian_tarneeb'=>'الطرنيب السوري','tarneeb_400'=>'طرنيب 400','hand'=>'الهاند','hand_partner'=>'هاند شراكة','saudi_hand'=>'الهاند السعودي','banakil'=>'بناكيل','pinochle'=>'بناكل','solitaire_multiplayer'=>'السوليتير التنافسي','trix'=>'تركس','trix_partner'=>'تركس شراكة','trix_complex'=>'تركس كمبلكس','baloot'=>'بلوت'][$key] ?? $key; }
+    private function arabicName(string $key): string { return ['syrian_tarneeb'=>'الطرنيب السوري','tarneeb_400'=>'طرنيب 400','hand'=>'الهاند','hand_partner'=>'هاند شراكة','saudi_hand'=>'الهاند السعودي','banakil'=>'بناكل','pinochle'=>'بناكل','solitaire_multiplayer'=>'السوليتير التنافسي','trix'=>'تركس','trix_partner'=>'تركس شراكة','trix_complex'=>'تركس كمبلكس','baloot'=>'بلوت'][$key] ?? $key; }
     private function shortName(string $p): string { return str_replace(['user:','bot:'],['لاعب ','بوت '],$p); }
 }

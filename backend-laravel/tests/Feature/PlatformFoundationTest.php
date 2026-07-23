@@ -11,14 +11,16 @@ class PlatformFoundationTest extends TestCase
         $this->get('/health')->assertOk()->assertJsonStructure(['ok','version','database','counts','time']);
     }
 
-    public function test_robots_and_sitemap_are_available(): void
+    public function test_robots_and_sitemap_are_available_even_without_seeded_data(): void
     {
-        $this->get('/robots.txt')->assertOk();
-        $this->get('/sitemap.xml')->assertOk();
+        $robots = $this->get('/robots.txt')->assertOk();
+        $this->assertSame('text/plain; charset=utf-8', strtolower((string) $robots->headers->get('Content-Type')));
+        $this->get('/sitemap.xml')->assertOk()->assertSee('<urlset',false);
     }
 
-    public function test_pwa_manifest_exists(): void
+    public function test_pwa_manifest_is_served_by_laravel(): void
     {
-        $this->get('/manifest.webmanifest')->assertOk();
+        $manifest = $this->get('/manifest.webmanifest')->assertOk();
+        $this->assertSame('application/manifest+json; charset=utf-8', strtolower((string) $manifest->headers->get('Content-Type')));
     }
 }

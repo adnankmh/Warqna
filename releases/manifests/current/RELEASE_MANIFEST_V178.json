@@ -1,0 +1,12 @@
+{
+  "version": "0.2.2",
+  "build": 178,
+  "display": "V0.2.2",
+  "type": "full-corrected-release",
+  "fixes": [
+    "clean project root",
+    "Laravel User factory support",
+    "club visibility and permission schema compatibility",
+    "V0.2.1 feature patch merged"
+  ]
+}

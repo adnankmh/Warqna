@@ -1,0 +1,22 @@
+{
+  "version": "0.3.4",
+  "build": 185,
+  "display": "V0.3.4",
+  "type": "world-class-table-marketplace-secure-store",
+  "name": "Warqnaa V0.3.4 World-Class Tables & Secure Store",
+  "features": [
+    "responsive emerald-and-gold table marketplace",
+    "40 approved reference tables visible in four 10-table collections",
+    "exact approved catalog artwork with runtime source cropping for undersized legacy exports",
+    "140 inherited table skins preserved without duplicates",
+    "server-authoritative activation for owned cosmetics",
+    "production store blocks local balance and ownership mutation",
+    "six-language marketplace navigation",
+    "inherited 18-game, rewards, clubs, voice and anti-cheat foundations"
+  ],
+  "admin": {
+    "username": "Adnan",
+    "level": 99,
+    "designer_access": "primary-admin-only"
+  }
+}

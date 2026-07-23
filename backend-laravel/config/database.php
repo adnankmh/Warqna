@@ -1,7 +1,20 @@
 <?php
 use Illuminate\Support\Str;
 $db = env('DB_DATABASE', database_path('database.sqlite'));
-if (env('DB_CONNECTION','sqlite') === 'sqlite' && $db && !str_starts_with($db, '/') && !preg_match('/^[A-Za-z]:[\\\\\/]/', $db)) {
+$isSqlite = env('DB_CONNECTION', 'sqlite') === 'sqlite';
+
+// Preserve SQLite's in-memory token and URI filenames. Converting `:memory:`
+// into base_path(':memory:') makes Laravel look for a literal file and breaks
+// PHPUnit before migrations can run.
+if (
+    $isSqlite
+    && is_string($db)
+    && $db !== ''
+    && $db !== ':memory:'
+    && !str_starts_with($db, 'file:')
+    && !str_starts_with($db, '/')
+    && !preg_match('~^[A-Za-z]:[/\\\\]~', $db)
+) {
     $db = base_path($db);
 }
 return [
@@ -29,6 +42,20 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
+        ],
+        'pgsql' => [
+            'driver' => 'pgsql',
+            'url' => env('DB_URL'),
+            'host' => env('DB_HOST', '127.0.0.1'),
+            'port' => env('DB_PORT', '5432'),
+            'database' => env('DB_DATABASE', 'warqna'),
+            'username' => env('DB_USERNAME', 'warqna'),
+            'password' => env('DB_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
     ],
     'migrations' => ['table' => 'migrations', 'update_date_on_publish' => true],

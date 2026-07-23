@@ -10,13 +10,12 @@ use Illuminate\Support\Facades\{DB,Hash,Schema,Log};
 
 class RoomController
 {
- private array $seatOrder = ['south','north','west','east','south_west','south_east'];
+ private array $seatOrder = ['south','south_east','east','north','west','south_west'];
  private array $seatLabels = ['south'=>'أسفل','north'=>'أعلى','west'=>'يسار','east'=>'يمين','south_west'=>'أسفل يسار','south_east'=>'أسفل يمين'];
 
  public function index(Game $game){
   $uid=auth()->id();
   $rooms=Room::with(['players.user.profile','game'])->where('game_id',$game->id)->whereIn('status',['waiting','bidding','playing'])
-   ->whereHas('players',fn($q)=>$q->where('is_bot',false)->whereNotNull('user_id')->where('connected',true))
    ->where(function($q) use($uid){ $q->where('visibility','public')->orWhere('owner_id',$uid)->orWhereHas('players',fn($p)=>$p->where('user_id',$uid)); })
    ->latest()->get();
   $leaders=\App\Models\User::with('profile')->whereHas('profile')->get()->sortByDesc(fn($u)=>$u->profile->games_played ?? 0)->take(10);
@@ -113,7 +112,10 @@ class RoomController
  }
  private function closeIfNoRealPlayers(Room $room, array $state, string $reason='تم إغلاق الغرفة لأن كل اللاعبين الحقيقيين خرجوا.'): bool{
   $room->refresh();
-  if($this->realPlayersCount($room,false)===0 || $this->realPlayersCount($room,true)===0){
+  // A temporary disconnect must not close the room. Keep it recoverable while
+  // at least one real-player seat still exists; inactivity replacement is
+  // handled separately and can be reclaimed by the same user.
+  if($this->realPlayersCount($room,false)===0){
    $state['messages'][]=$reason;
    $state['closed_reason']=$reason;
    $state['closed_at']=now()->toIso8601String();
@@ -156,8 +158,10 @@ class RoomController
   abort_if(in_array(auth()->id(),$banned,true),403,'تم إخراجك من هذه اللعبة ولا يمكنك العودة لنفس الغرفة.');
   $existing=$room->players()->where('user_id',auth()->id())->first();
   if($existing){ if(!$existing->connected){$existing->update(['connected'=>true,'missed_turns'=>0]); return redirect()->route('rooms.show',$room->code)->with('ok','عدت إلى نفس مقعدك في الغرفة');} abort(409,'أنت داخل الغرفة بالفعل'); }
+  $manualExits=(array)($state['manual_exit_counts'] ?? $state['manual_leave_counts'] ?? []);
+  abort_if((int)($manualExits[auth()->id()] ?? 0) >= 3,403,'تم منع العودة إلى هذه الغرفة بعد ثلاث مرات خروج يدوي.');
   $displaced=$state['disconnected_replacements'][auth()->id()] ?? null;
-  if($displaced && ($displaced['returns'] ?? 0) < 3){
+  if($displaced){
    $bot=$room->players->firstWhere('id',(int)($displaced['room_player_id'] ?? 0));
    if($bot && $bot->is_bot){
     $oldKey='bot:'.$bot->id; $newKey='user:'.auth()->id();
@@ -168,7 +172,7 @@ class RoomController
     $state['disconnected_replacements'][auth()->id()]['returns']=(int)($displaced['returns'] ?? 0)+1;
     $state['messages'][]=auth()->user()->username.' عاد إلى نفس مقعده بعد انقطاع مؤقت.';
     $room->update(['state'=>$state]);
-    return redirect()->route('rooms.show',$room->code)->with('ok','عدت إلى نفس مقعدك. العودة المتاحة: '.$state['disconnected_replacements'][auth()->id()]['returns'].'/3');
+    return redirect()->route('rooms.show',$room->code)->with('ok','عدت إلى نفس مقعدك. الانقطاع المؤقت لا يُحسب خروجًا يدويًا.');
    }
   }
   abort_if((auth()->user()->profile?->level ?? 1) < $room->min_level,403,'مستواك أقل من المطلوب');
@@ -225,7 +229,11 @@ class RoomController
    if(in_array($room->game->key,['hand','hand_partner','pinochle','banakil','konkan'],true) && !empty($oldState['scores'])){ $engineOptions['previous_scores']=$oldState['scores']; $engineOptions['round']=min(((int)($oldState['round'] ?? 1))+1, 5); }
    $state=$engine->initialState($players,$engineOptions);
    if(!empty($oldState['score']) && empty($oldState['winner_team'])) { $state['score']=$oldState['score']; $state['round']=(int)($oldState['round'] ?? 1)+1; }
-   $state['room_code']=$room->code; $state['game']=$room->game->key; $state['seat_partners']=$this->partnerMap($room->max_players);
+   $state['room_code'] = $room->code;
+   $state['game'] = $room->game->key;
+   $state['seat_partners'] = $this->partnerMap($room->max_players);
+   $state['play_direction'] = 'counterclockwise';
+   $state['next_player_side'] = 'right';
    if(!empty($oldState['tournament_id'])){ $state['tournament_id']=$oldState['tournament_id']; $state['tournament_stage']=$oldState['tournament_stage'] ?? null; $state['recording_enabled']=true; $state['video_frames']=$oldState['video_frames'] ?? []; }
    [$fixedSpeed,$fixedTimeout]=$this->normalizeSpeed($oldState['speed'] ?? ($room->state['speed'] ?? 'medium'));
    $state['speed']=$fixedSpeed;
@@ -493,6 +501,12 @@ class RoomController
   $state['speed']=$fixedSpeed;
   $state['turn_timeout_seconds']=$fixedTimeout;
   $copy=$state; $copy['hand']=$state['hands'][$myKey] ?? []; if(!empty($state['score_popups'][$myKey])) $copy['score_popup']=$state['score_popups'][$myKey];
+  if(isset($copy['deck']) && is_array($copy['deck'])) $copy['deck_count']=count($copy['deck']);
+  if(isset($copy['boneyard']) && is_array($copy['boneyard'])) $copy['boneyard_count']=count($copy['boneyard']);
+  unset(
+   $copy['_global_engine'], $copy['_tarneeb_v2'], $copy['deck'], $copy['boneyard'], $copy['seed'],
+   $copy['plain_room_password'], $copy['kicked_user_ids'], $copy['banned_user_ids'], $copy['disconnected_replacements']
+  );
   $copy['legal_cards']=[];
   if(($state['phase'] ?? '')==='playing' && !empty($copy['hand'])){
    try{ $engine=\App\Services\GameEngine\GameFactory::make($state['game'] ?? ($state['game_type'] ?? 'tarneeb')); foreach($copy['hand'] as $c){ if($engine->validate($state,$myKey,'play_card',['card'=>$c]) || in_array(($state['game_type']??''),['hand','banakil','konkan'],true)) $copy['legal_cards'][]=$c; } }catch(\Throwable $e){ $copy['legal_cards']=$copy['hand']; }
@@ -506,18 +520,23 @@ class RoomController
   abort_unless($player,404,'أنت لست داخل هذه الغرفة');
   $state=$room->state ?: [];
   $uid=auth()->id(); $oldKey='user:'.$uid;
-  $counts=$state['manual_leave_counts'] ?? []; $counts[$uid]=(int)($counts[$uid] ?? 0)+1; $state['manual_leave_counts']=$counts;
+  $counts=(array)($state['manual_exit_counts'] ?? $state['manual_leave_counts'] ?? []);
+  $counts[$uid]=(int)($counts[$uid] ?? 0)+1;
+  $state['manual_exit_counts']=$counts;
+  unset($state['manual_leave_counts']);
   if(!empty($state['leave_xp_penalty']) && auth()->user()->profile){ auth()->user()->profile->xp=max(0,(int)auth()->user()->profile->xp-200); auth()->user()->profile->save(); $state['messages'][]='تم خصم 200 XP بسبب الخروج اليدوي من اللعبة حسب إعدادات الغرفة.'; }
   if($counts[$uid] >= 3){ $banned=$state['banned_user_ids'] ?? []; $banned[]=(int)$uid; $state['banned_user_ids']=array_values(array_unique($banned)); }
   $oldName=auth()->user()->username; $playerId=$player->id; $newKey='bot:'.$playerId;
   $bot=$this->pickBotIdentity($room,$playerId);
   $player->update(['user_id'=>null,'is_bot'=>true,'bot_key'=>$bot['name'],'connected'=>true,'missed_turns'=>0]);
+  $returns=(int)(($state['disconnected_replacements'][$uid]['returns'] ?? 0));
+  $state['disconnected_replacements'][$uid]=['room_player_id'=>$playerId,'seat'=>$player->seat,'returns'=>$returns];
   if(isset($state['hands'][$oldKey])){ $state['hands'][$newKey]=$state['hands'][$oldKey]; unset($state['hands'][$oldKey]); }
   if(($state['turn'] ?? null)===$oldKey) $state['turn']=$newKey;
   if(!empty($state['players'])) $state['players']=array_values(array_map(fn($p)=>$p===$oldKey?$newKey:$p,$state['players']));
   $state['messages'][]=$oldName.' غادر الغرفة. الكمبيوتر سيكمل بدله إذا بقي لاعبون حقيقيون. عدد الخروج اليدوي: '.$counts[$uid].'/3.';
   if($counts[$uid] >= 3) $state['messages'][]='تم منع '.$oldName.' من العودة لهذه الغرفة بعد 3 مرات خروج.';
-  if($this->closeIfNoRealPlayers($room,$state,'تم إغلاق الغرفة وإخفاؤها لأن آخر لاعب حقيقي غادر.')){
+  if($counts[$uid] >= 3 && $this->closeIfNoRealPlayers($room,$state,'تم إغلاق الغرفة وإخفاؤها بعد استنفاد آخر لاعب حقيقي فرص العودة.')){
    $url = route('rooms.index',$room->game?->key ?? 'tarneeb');
    if(request()->expectsJson() || request()->ajax()) return response()->json(['ok'=>true,'redirect'=>$url,'left'=>true,'closed'=>true,'message'=>'خرجت من اللعبة وتم إغلاق الغرفة لأن كل اللاعبين الحقيقيين خرجوا.']);
    return redirect()->route('rooms.index',$room->game?->key ?? 'tarneeb')->with('ok','خرجت من اللعبة وتم إغلاق الغرفة لأن كل اللاعبين الحقيقيين خرجوا.');
@@ -543,7 +562,6 @@ class RoomController
   }
   if($rp->fresh()->missed_turns>=3){
    $uid=(int)auth()->id(); $returns=(int)(($state['disconnected_replacements'][$uid]['returns'] ?? 0));
-   if($returns >= 3){ $banned=$state['banned_user_ids'] ?? []; $banned[]=$uid; $state['banned_user_ids']=array_values(array_unique($banned)); $state['messages'][]='🚫 تم منع '.$rp->user?->username.' من العودة لنفس الغرفة بعد 3 مرات خروج/عودة.'; }
    $oldKey='user:'.$uid; $newKey='bot:'.$rp->id; $name=$rp->user?->username ?: 'لاعب';
    $bot=$this->pickBotIdentity($room,$rp->id);
    $rp->update(['user_id'=>null,'is_bot'=>true,'bot_key'=>$bot['name'],'connected'=>true,'missed_turns'=>0]);
@@ -720,33 +738,41 @@ class RoomController
 
 
  private function awardProfilePointsIfFinished(Room $room,array $state): array{
-  if(($state['phase'] ?? '')!=='finished' || !empty($state['profile_points_awarded'])) return $state;
+  $phase=(string)($state['phase'] ?? '');
+  if(!in_array($phase,['round_end','finished'],true)) return $state;
+  $round=(int)($state['round'] ?? 1);
+  $isFinal=$phase==='finished' && (array_key_exists('winner_team',$state) || !empty($state['game_over']) || !empty($state['overall_winner']) || !empty($state['winner_final']) || !empty($state['winner']));
+  $eventType=$isFinal ? 'match_complete' : 'round_complete';
+  $awardedRounds=(array)($state['profile_points_awarded_rounds'] ?? []);
+  $awardMarker=$eventType.':'.$round;
+  if(in_array($awardMarker,$awardedRounds,true)) return $state;
   try{
-   $room->loadMissing('players.user.profile','players.user.inventoryItems.storeItem');
-   $winnerTeam=$state['winner_team'] ?? null;
-   $winner=$state['winner'] ?? null;
+   $room->loadMissing('players.user.profile','game');
+   $winnerTeam=$state['winner_team'] ?? $state['round_winner_team'] ?? null;
+   $winner=$state['winner'] ?? $state['round_winner'] ?? null;
+   $teams=$state['teams'] ?? [];
+   $mode=!empty($state['tournament_id']) ? (!empty($state['sponsored'])?'sponsored':'tournament') : (!empty($state['club_id'])?'club':'normal');
    $pop=[];
+   $service=app(\App\Services\Progression\ProgressionService::class);
    foreach($room->players as $rp){
-    if($rp->is_bot || !$rp->user || !$rp->user->profile) continue;
+    if($rp->is_bot || !$rp->user) continue;
     $key='user:'.$rp->user_id;
-    $win=false;
-    if($winner && $winner===$key) $win=true;
-    if($winnerTeam && !empty($state['teams'][$winnerTeam]) && in_array($key,$state['teams'][$winnerTeam],true)) $win=true;
-    $base=((int)($rp->user->profile->pasha_days ?? 0)>0) ? 20 : 10;
-    $mult=$this->activeXpMultiplier($rp->user);
-    $xp=(int)round($base*$mult);
-    $profile=$rp->user->profile;
-    $oldLevel=(int)($profile->level ?? 1);
-    $profile->xp=max(0,(int)$profile->xp)+$xp;
-    $profile->games_played=(int)($profile->games_played ?? 0)+1;
-    $profile->wins=(int)($profile->wins ?? 0)+($win?1:0);
-    $profile->level=app(\App\Services\Leveling\XpService::class)->levelForXp((int)$profile->xp);
-    $profile->save();
-    $pop[$key]=['xp'=>$xp,'tokens'=>0,'win'=>$win,'base'=>$base,'multiplier'=>$mult,'old_level'=>$oldLevel,'new_level'=>$profile->level];
+    $win=$winner===$key;
+    if($winnerTeam!==null && isset($teams[$winnerTeam]) && is_array($teams[$winnerTeam])) $win=in_array($key,$teams[$winnerTeam],true);
+    $eventKey='web-room:'.$room->id.':round:'.$round.':user:'.$rp->user_id.':'.$eventType;
+    $pop[$key]=$service->award($rp->user,$eventKey,[
+     'room_id'=>$room->id,'event_type'=>$eventType,'mode'=>$mode,'won'=>$win,
+     'stage'=>(string)($state['tournament_stage'] ?? ($isFinal && $win?'champion':'round')),
+     'game'=>$room->game?->key,'round'=>$round,
+     'same_club_team'=>(bool)($state['same_club_team'] ?? false),
+    ]);
    }
-   $state['profile_points_awarded']=true; $state['score_popups']=$pop;
-   if($pop) $state['messages'][]='تمت إضافة XP الجولة تلقائيًا: اللاعب العادي 10 XP، الباشا 20 XP، والمسرّع يضاعف نقاط الجولة حسب نسبته.';
-  }catch(\Throwable $e){ $state['messages'][]='انتهت الجولة، وسيتم تحديث نقاط الخبرة لاحقًا عند توفر الخدمة.'; }
+   $awardedRounds[]=$awardMarker;
+   $state['profile_points_awarded_rounds']=array_values(array_unique($awardedRounds));
+   if($isFinal) $state['profile_points_awarded']=true;
+   $state['score_popups']=array_merge((array)($state['score_popups'] ?? []),$pop);
+   if($pop) $state['messages'][]='✅ تم احتساب نقاط '.$eventType.': الباشا ×2، المسرّعات تراكمية، والمسابقات أعلى من اللعب العادي.';
+  }catch(\Throwable $e){ Log::warning('progression_award_failed',['room'=>$room->id,'error'=>$e->getMessage()]); $state['messages'][]='انتهت الجولة، وسيُعاد احتساب النقاط تلقائيًا دون تكرار عند عودة الخدمة.'; }
   return $state;
 }
 
@@ -787,9 +813,9 @@ class RoomController
   $state=$room->state ?: [];
   if(!$connected){ $state['messages'][]=auth()->user()->username.' خرج من الصفحة مؤقتًا.'; }
   else { $state['messages'][]=auth()->user()->username.' عاد إلى الطاولة.'; }
-  if(!$connected && $this->closeIfNoRealPlayers($room,$state,'تم إغلاق الغرفة تلقائيًا لأن كل اللاعبين الحقيقيين خرجوا من الصفحة.')){
-   return response()->json(['ok'=>true,'connected'=>false,'closed'=>true,'redirect'=>route('rooms.index',$room->game?->key ?? 'tarneeb')]);
-  }
+  // Leaving the page or losing the network is temporary. Keep the room alive
+  // so the player can reclaim the same seat; three missed turns are handled by
+  // timeoutAutoPlay without consuming manual-exit allowance.
   $room->update(['state'=>$state]);
   return response()->json(['ok'=>true,'connected'=>$connected]);
  }

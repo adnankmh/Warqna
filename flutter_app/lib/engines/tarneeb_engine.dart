@@ -63,6 +63,11 @@ class TarneebLocalEngine {
   final int targetScore;
   final math.Random _random;
   final List<String> playerNames;
+  final String difficulty;
+
+  bool get _easyAi => difficulty == 'easy';
+  bool get _normalAi => difficulty == 'normal';
+  bool get _masterAi => difficulty == 'master';
 
   TarneebPhase phase = TarneebPhase.bidding;
   int dealerSeat = 3;
@@ -75,6 +80,8 @@ class TarneebLocalEngine {
   final List<TarneebBid> bids = <TarneebBid>[];
   final List<List<TarneebCard>> hands = List.generate(4, (_) => <TarneebCard>[]);
   final List<TarneebPlay> trick = <TarneebPlay>[];
+  final List<TarneebPlay> lastTrick = <TarneebPlay>[];
+  int? lastTrickWinner;
   final List<List<TarneebPlay>> completedTricks = <List<TarneebPlay>>[];
   final List<int> scores = [0, 0];
   final List<int> roundTricks = [0, 0];
@@ -85,6 +92,7 @@ class TarneebLocalEngine {
     this.targetScore = 41,
     math.Random? random,
     List<String>? playerNames,
+    this.difficulty = 'pro',
   })  : _random = random ?? math.Random.secure(),
         playerNames = playerNames ?? const ['أحمد', 'عاصم', 'ليلى', 'جميل'] {
     startNextRound();
@@ -93,6 +101,9 @@ class TarneebLocalEngine {
   int teamOf(int seat) => seat.isEven ? 0 : 1;
   bool get isHumanTurn => currentSeat == 0 && phase != TarneebPhase.gameOver;
   List<TarneebCard> get humanHand => List.unmodifiable(hands[0]);
+
+  /// Backwards-compatible read-only team score view used by UI and challenge markers.
+  List<int> get teamScores => List<int>.unmodifiable(scores);
 
   void startNextRound() {
     round += 1;
@@ -105,10 +116,14 @@ class TarneebLocalEngine {
     passedSeats.clear();
     bids.clear();
     trick.clear();
+    lastTrick.clear();
+    lastTrickWinner = null;
     completedTricks.clear();
     roundTricks[0] = 0;
     roundTricks[1] = 0;
-    for (final hand in hands) hand.clear();
+    for (final hand in hands) {
+      hand.clear();
+    }
 
     final deck = <TarneebCard>[
       for (final suit in suits)
@@ -118,7 +133,9 @@ class TarneebLocalEngine {
     for (var i = 0; i < 52; i++) {
       hands[i % 4].add(deck[i]);
     }
-    for (final hand in hands) _sortHand(hand);
+    for (final hand in hands) {
+      _sortHand(hand);
+    }
     messages.add('بدأت الجولة $round: تم توزيع 13 ورقة فريدة لكل لاعب.');
   }
 
@@ -142,7 +159,7 @@ class TarneebLocalEngine {
 
     if (highestBid == null && passedSeats.length == 4) {
       messages.add('مرّر الجميع؛ أعيد توزيع الورق دون نقاط.');
-      dealerSeat = (dealerSeat + 3) % 4;
+      dealerSeat = (dealerSeat + 1) % 4;
       startNextRound();
       return;
     }
@@ -183,6 +200,11 @@ class TarneebLocalEngine {
     if (handIndex < 0) throw StateError('الورقة ليست في يد اللاعب');
     if (!legalCards(seat).any((c) => c.code == card.code)) throw StateError('يجب اتباع نوع الورقة المتصدرة');
 
+    if (trick.isEmpty) {
+      lastTrick.clear();
+      lastTrickWinner = null;
+    }
+
     final played = hands[seat].removeAt(handIndex);
     trick.add(TarneebPlay(seat, played));
     messages.add('${playerNames[seat]} رمى ${played.label}');
@@ -195,6 +217,10 @@ class TarneebLocalEngine {
     final winner = _trickWinner(trick);
     final captured = List<TarneebPlay>.from(trick);
     completedTricks.add(captured);
+    lastTrick
+      ..clear()
+      ..addAll(captured);
+    lastTrickWinner = winner;
     trick.clear();
     roundTricks[teamOf(winner)] += 1;
     currentSeat = winner;
@@ -239,7 +265,10 @@ class TarneebLocalEngine {
     estimate = estimate.clamp(7, 10).toInt();
     final minimum = (highestBid ?? 6) + 1;
     if (estimate < minimum || minimum > 13) return null;
-    if (_random.nextDouble() < .12 && estimate < 10) return null;
+    if (_easyAi && _random.nextDouble() < .45) return _random.nextBool() ? null : math.min(minimum, 8).toInt();
+    if (_normalAi && _random.nextDouble() < .22 && estimate < 10) return null;
+    if (!_masterAi && _random.nextDouble() < .12 && estimate < 10) return null;
+    if (_masterAi) estimate = math.min(11, estimate + (hand.where((c) => c.rank == 'A' || c.rank == 'K').length >= 4 ? 1 : 0)).toInt();
     return math.min(estimate, 13).toInt();
   }
 
@@ -253,9 +282,20 @@ class TarneebLocalEngine {
 
   TarneebCard _botCard(int seat) {
     final legal = [...legalCards(seat)]..sort((a, b) => a.power.compareTo(b.power));
+    if (_easyAi) return legal[_random.nextInt(legal.length)];
+    if (_normalAi && _random.nextDouble() < .18) return legal[_random.nextInt(legal.length)];
+
     if (trick.isEmpty) {
+      final suitCounts = <String, int>{for (final suit in suits) suit: 0};
+      for (final card in hands[seat]) {
+        suitCounts[card.suit] = (suitCounts[card.suit] ?? 0) + 1;
+      }
+      final longSuit = suitCounts.entries.where((entry) => entry.key != trump).reduce((a, b) => a.value >= b.value ? a : b).key;
+      final longSuitCards = legal.where((card) => card.suit == longSuit).toList()..sort((a, b) => b.power.compareTo(a.power));
       final aces = legal.where((c) => c.rank == 'A').toList();
-      return aces.isNotEmpty && _random.nextDouble() < .65 ? aces.first : legal.first;
+      if (aces.isNotEmpty && (_masterAi || _random.nextDouble() < .72)) return aces.first;
+      if (_masterAi && longSuitCards.length > 2) return longSuitCards[1];
+      return longSuitCards.isNotEmpty ? longSuitCards.first : legal.last;
     }
 
     final currentWinner = _trickWinner(trick);
@@ -265,8 +305,15 @@ class TarneebLocalEngine {
     final winning = legal.where((candidate) {
       final test = [...trick, TarneebPlay(seat, candidate)];
       return _trickWinner(test) == seat;
-    }).toList();
+    }).toList()..sort((a, b) => a.power.compareTo(b.power));
     if (winning.isNotEmpty) return winning.first;
+
+    // If void in the leading suit, master AI discards a dangerous high card
+    // while preserving trump whenever possible.
+    if (_masterAi) {
+      final nonTrump = legal.where((card) => card.suit != trump).toList()..sort((a, b) => b.power.compareTo(a.power));
+      if (nonTrump.isNotEmpty) return nonTrump.first;
+    }
     return legal.first;
   }
 
@@ -288,10 +335,21 @@ class TarneebLocalEngine {
   }
 
   void _finishRound() {
-    final biddingSeat = bidWinnerSeat!;
+    final biddingSeat = bidWinnerSeat;
+    final contract = highestBid;
+
+    // A normal round always has a winning bidder and a contract. Tests, restored
+    // sessions, or defensive recovery paths may reach the final trick without
+    // those values. End safely instead of throwing a null-check exception, and
+    // keep lastTrick available so the completed trick remains visible.
+    if (biddingSeat == null || contract == null) {
+      phase = TarneebPhase.roundEnd;
+      messages.add('انتهت الجولة دون بيانات مزايدة مكتملة. تم حفظ آخر لَمّة بأمان.');
+      return;
+    }
+
     final biddingTeam = teamOf(biddingSeat);
     final otherTeam = 1 - biddingTeam;
-    final contract = highestBid!;
     if (roundTricks[biddingTeam] >= contract) {
       scores[biddingTeam] += roundTricks[biddingTeam];
       scores[otherTeam] += roundTricks[otherTeam];
@@ -335,6 +393,8 @@ class TarneebLocalEngine {
 
 extension on String {
   Iterable<String> get characters sync* {
-    for (var i = 0; i < length; i++) yield this[i];
+    for (var i = 0; i < length; i++) {
+      yield this[i];
+    }
   }
 }

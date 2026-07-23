@@ -4,17 +4,47 @@ use Illuminate\Database\Seeder; use Illuminate\Support\Facades\{Hash,DB}; use Ap
 class DatabaseSeeder extends Seeder { public function run(): void {
  // v136: country_name() now returns a scalar string, so Seeder can use it directly without helper variables.
  $admin=User::updateOrCreate(['email'=>env('ADMIN_EMAIL','adnanasd63@gmail.com')],['username'=>env('ADMIN_USERNAME','Adnan'),'password'=>Hash::make(env('ADMIN_PASSWORD','Adnan123')),'is_admin'=>true]);
- Profile::updateOrCreate(['user_id'=>$admin->id],['display_name'=>'Adnan','country_code'=>'PS','country_name'=>'Palestine','level'=>90,'xp'=>9000000,'games_played'=>20000,'wins'=>15000,'name_color'=>'#facc15','chat_color'=>'#facc15','pasha_days'=>3650,'badge'=>'king']);
+ Profile::updateOrCreate(['user_id'=>$admin->id],['display_name'=>'Adnan','avatar'=>'🦁','country_code'=>'PS','country_name'=>'Palestine','level'=>99,'xp'=>9000000,'games_played'=>20000,'wins'=>15000,'name_color'=>'#facc15','chat_color'=>'#facc15','pasha_days'=>3650,'badge'=>'king']);
  Wallet::updateOrCreate(['user_id'=>$admin->id],['tokens'=>1000000000000000000,'gems'=>100000]);
  // v107 demo users: 3 ready test users
- foreach ([
-   ['Kareem','kareem@warqna.local','Kareem123','#38bdf8','JO',42,250000],
-   ['Rami','rami@warqna.local','Rami12345','#22c55e','PS',35,180000],
-   ['Lina','lina@warqna.local','Lina12345','#ec4899','EG',28,120000],
- ] as [$username,$email,$password,$color,$country,$level,$tokens]) {
+ $demoUsers = [
+   ['Kareem','kareem@warqna.local','Kareem123','#38bdf8','JO',42,250000,'🦅'],
+   ['Rami','rami@warqna.local','Rami12345','#22c55e','PS',35,180000,'🐺'],
+   ['Lina','lina@warqna.local','Lina12345','#ec4899','EG',28,120000,'🌹'],
+   ['Samar','samar@warqna.local','Samar12345','#a78bfa','PS',24,95000,'🦋'],
+   ['Layla','layla@warqna.local','Layla12345','#f59e0b','JO',31,110000,'🌙'],
+   ['Jameel','jameel@warqna.local','Jameel12345','#fb923c','PS',22,88000,'🐯'],
+   ['Nour','nour@warqna.local','Nour12345','#fde047','EG',19,76000,'⭐'],
+   ['Omar','omar@warqna.local','Omar12345','#60a5fa','PS',27,68000,'🛡️'],
+   ['Sara','sara@warqna.local','Sara12345','#f472b6','LB',29,72000,'👑'],
+   ['Basel','basel@warqna.local','Basel12345','#ef4444','SY',33,84000,'🔥'],
+   ['Hala','hala@warqna.local','Hala12345','#22d3ee','PS',25,61000,'💎'],
+   ['Yazan','yazan@warqna.local','Yazan12345','#facc15','JO',30,79000,'⚡'],
+ ];
+ $seededDemoUsers = [];
+ foreach ($demoUsers as [$username,$email,$password,$color,$country,$level,$tokens,$avatar]) {
    $u=User::updateOrCreate(['email'=>$email],['username'=>$username,'password'=>Hash::make($password),'is_admin'=>false,'is_banned'=>false]);
-   Profile::updateOrCreate(['user_id'=>$u->id],['display_name'=>$username,'country_code'=>$country,'country_name'=>country_name($country),'level'=>$level,'xp'=>$level*1200,'games_played'=>$level*15,'wins'=>$level*7,'name_color'=>$color,'chat_color'=>$color,'pasha_days'=>0,'badge'=>'pro']);
+   Profile::updateOrCreate(['user_id'=>$u->id],['display_name'=>$username,'avatar'=>$avatar,'country_code'=>$country,'country_name'=>country_name($country),'level'=>$level,'xp'=>$level*1200,'games_played'=>$level*15,'wins'=>$level*7,'name_color'=>$color,'chat_color'=>$color,'pasha_days'=>0,'badge'=>'pro']);
    Wallet::updateOrCreate(['user_id'=>$u->id],['tokens'=>$tokens,'gems'=>0]);
+   $seededDemoUsers[strtolower($username)] = $u;
+ }
+
+ // V0.3 demo club: mixed levels and delegated permissions for testing groups.
+ if (\Illuminate\Support\Facades\Schema::hasTable('clubs') && \Illuminate\Support\Facades\Schema::hasTable('club_members')) {
+   $club = Club::updateOrCreate(
+     ['name'=>'نخبة ورقنا'],
+     ['owner_id'=>$admin->id,'logo'=>'👑','description'=>'نادي تجريبي لاختبار الصور والصلاحيات والمنافسات والسجل.','level'=>4,'weekly_points'=>2840,'total_points'=>42500,'treasury'=>250000,'capacity'=>50,'league_tier'=>'platinum','visibility'=>'public']
+   );
+   ClubMember::updateOrCreate(['club_id'=>$club->id,'user_id'=>$admin->id],['role'=>'owner','permissions'=>['all'=>true],'weekly_points'=>900]);
+   foreach ([
+     'kareem'=>['moderator',['manage_club'=>true,'accept_members'=>true,'kick_members'=>true,'create_tournaments'=>true,'manage_chat'=>true,'create_announcements'=>true],620],
+     'rami'=>['moderator',['accept_members'=>true,'kick_members'=>false,'create_tournaments'=>true,'manage_chat'=>true,'create_announcements'=>false],480],
+     'lina'=>['moderator',['accept_members'=>false,'kick_members'=>false,'create_tournaments'=>false,'manage_chat'=>true,'create_announcements'=>true],390],
+     'samar'=>['member',[],220], 'layla'=>['member',[],180], 'jameel'=>['member',[],150],
+   ] as $key=>[$role,$permissions,$points]) {
+     if (!isset($seededDemoUsers[$key])) continue;
+     ClubMember::updateOrCreate(['club_id'=>$club->id,'user_id'=>$seededDemoUsers[$key]->id],['role'=>$role,'permissions'=>$permissions,'weekly_points'=>$points]);
+   }
  }
 
  
@@ -52,7 +82,7 @@ class DatabaseSeeder extends Seeder { public function run(): void {
   DB::table('economy_seasons')->updateOrInsert(['key'=>'season_royal_launch'],[
    'name'=>json_encode(['ar'=>'موسم الانطلاق الملكي','en'=>'Royal Launch Season'],JSON_UNESCAPED_UNICODE),
    'starts_at'=>now()->startOfMonth(),'ends_at'=>now()->addMonth(),'active'=>true,
-   'rewards'=>json_encode(['top_1'=>'إطار أسطوري + 100000 توكنز','top_10'=>'شارة ملكية','daily'=>'مكافآت دخول'],JSON_UNESCAPED_UNICODE),
+   'rewards'=>json_encode(['top_1'=>'إطار أسطوري + 200 توكن','top_10'=>'شارة ملكية','daily'=>'مكافآت دخول'],JSON_UNESCAPED_UNICODE),
    'created_at'=>now(),'updated_at'=>now()
   ]);
  }
@@ -361,9 +391,32 @@ foreach($tables as [$key,$ar,$en,$css,$tier,$price,$days]) DB::table('store_item
  foreach($v82Cards as [$key,$ar,$en,$css,$price,$days]) DB::table('store_items')->updateOrInsert(['key'=>$key],['name'=>json_encode(['ar'=>$ar,'en'=>$en],JSON_UNESCAPED_UNICODE),'category'=>'card_back','price'=>$price,'duration_days'=>$days,'payload'=>json_encode(['card_back'=>$css,'v82'=>true],JSON_UNESCAPED_UNICODE),'active'=>true,'created_at'=>now(),'updated_at'=>now()]);
 
  $club=Club::firstOrCreate(['name'=>'Warqna Elite'],['owner_id'=>$admin->id,'level'=>5,'weekly_points'=>95000,'treasury'=>1000000]); ClubMember::firstOrCreate(['club_id'=>$club->id,'user_id'=>$admin->id],['role'=>'owner','permissions'=>['all'=>true],'weekly_points'=>9999]);
- $tarneeb=DB::table('games')->where('key','tarneeb')->first(); if($tarneeb) Tournament::firstOrCreate(['creator_id'=>$admin->id,'game_id'=>$tarneeb->id,'status'=>'open'],['stages'=>3,'seats_per_match'=>4,'entry_fee'=>100,'prize_pool'=>5000,'bracket'=>[]]);
- }}
+ $tarneeb=DB::table('games')->where('key','tarneeb')->first(); if($tarneeb) Tournament::firstOrCreate(['creator_id'=>$admin->id,'game_id'=>$tarneeb->id,'status'=>'open'],['stages'=>3,'seats_per_match'=>4,'entry_fee'=>0,'prize_pool'=>200,'bracket'=>[]]);
 
+ // v145 curated mobile catalog + additional test accounts.
+ $v145Games=['tarneeb','trix','hand','banakil','baloot','basra','tarneeb_400','syrian_tarneeb','trix_complex','saudi_hand','hand_partner','trix_partner'];
+ if (\Illuminate\Support\Facades\Schema::hasTable('games')) {
+   DB::table('games')->update(['active'=>false,'updated_at'=>now()]);
+   DB::table('games')->whereIn('key',$v145Games)->update(['active'=>true,'updated_at'=>now()]);
+   DB::table('games')->where('key','banakil')->update(['name'=>json_encode(['ar'=>'بناكل','en'=>'Banakil'],JSON_UNESCAPED_UNICODE),'updated_at'=>now()]);
+   DB::table('games')->where('key','basra')->update(['name'=>json_encode(['ar'=>'باصرة','en'=>'Basra'],JSON_UNESCAPED_UNICODE),'updated_at'=>now()]);
+ }
+ foreach ([
+   ['Samar','samar@warqna.local','Samar12345','#f97316','PS',24,95000,'🦋'],
+   ['Layla','layla@warqna.local','Layla12345','#c084fc','JO',31,110000,'🌙'],
+   ['Jameel','jameel@warqna.local','Jameel12345','#22d3ee','PS',22,88000,'🐯'],
+   ['Nour','nour@warqna.local','Nour12345','#f472b6','EG',19,76000,'⭐'],
+   ['Yaser','yaser@warqna.local','Yaser12345','#a3e635','SA',27,130000,'🦅'],
+   ['Omar','omar@warqna.local','Omar12345','#60a5fa','PS',32,90000,'🛡️'],
+   ['Sara','sara@warqna.local','Sara12345','#f472b6','JO',29,85000,'👑'],
+   ['Basel','basel@warqna.local','Basel12345','#34d399','PS',38,120000,'🔥'],
+   ['Hala','hala@warqna.local','Hala12345','#c084fc','EG',26,78000,'💎'],
+   ['Yazan','yazan@warqna.local','Yazan12345','#f59e0b','SA',41,150000,'⚡'],
+ ] as [$username,$email,$password,$color,$country,$level,$tokens]) {
+   $u=User::updateOrCreate(['email'=>$email],['username'=>$username,'password'=>Hash::make($password),'is_admin'=>false,'is_banned'=>false]);
+   Profile::updateOrCreate(['user_id'=>$u->id],['display_name'=>$username,'country_code'=>$country,'country_name'=>country_name($country),'level'=>$level,'xp'=>$level*1200,'games_played'=>$level*15,'wins'=>$level*7,'name_color'=>$color,'chat_color'=>$color,'pasha_days'=>0,'badge'=>'pro']);
+   Wallet::updateOrCreate(['user_id'=>$u->id],['tokens'=>$tokens,'gems'=>0]);
+ }
 
 // v105: normalized store manifest from uploaded docs: pasha year, 6 boosters, tiered tables/emojis, glow colors.
 DB::table('store_items')->updateOrInsert(['key'=>'pasha_365'],[
@@ -433,3 +486,4 @@ $v105Emoji=[
 foreach($v105Emoji as [$key,$ar,$en,$icons,$price,$tier]) DB::table('store_items')->updateOrInsert(['key'=>$key],[
  'name'=>json_encode(['ar'=>$ar,'en'=>$en],JSON_UNESCAPED_UNICODE),'category'=>'emoji_pack','price'=>$price,'duration_days'=>null,'payload'=>json_encode(['emojis'=>$icons,'emoji_tier'=>$tier,'animated'=>in_array($tier,['animated','vip']),'large'=>in_array($tier,['animated','vip']),'v105'=>true],JSON_UNESCAPED_UNICODE),'active'=>true,'created_at'=>now(),'updated_at'=>now()
 ]);
+ }}

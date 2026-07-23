@@ -1,8 +1,9 @@
 <?php
 namespace App\Http\Controllers;
 
-use App\Models\{User,Room,Tournament,Club,Game,AntiCheatEvent,Notification,StoreItem,SiteSetting,Friendship};
+use App\Models\{AdminDesignerEntity,User,Room,Tournament,Club,Game,AntiCheatEvent,Notification,StoreItem,SiteSetting,Friendship};
 use App\Services\Wallet\WalletService;
+use App\Services\WarqnaPro\StoreCatalogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -11,10 +12,16 @@ use Illuminate\Support\Str;
 class AdminController
 {
     private function guard(){ abort_unless(auth()->user()?->is_admin,403); }
-
-    public function index()
+    private function guardPrimaryDesigner(): void
     {
         $this->guard();
+        abort_unless(strcasecmp(trim((string)auth()->user()?->username), 'Adnan') === 0, 403, 'المصمم الشامل والمزامنة متاحان لحساب المدير الرئيسي Adnan فقط.');
+    }
+
+    public function index(StoreCatalogService $catalog)
+    {
+        $this->guard();
+        $catalog->sync();
         $storeItems=StoreItem::orderBy('category')->orderBy('price')->get();
         $siteSettings=SiteSetting::all()->keyBy('key');
         return view('admin.index',[
@@ -34,6 +41,7 @@ class AdminController
             'siteSettings'=>$siteSettings,
             'themeOptions'=>$this->themeOptions(),
             'categoryLabels'=>$this->categoryLabels(),
+            'designerEntities'=>AdminDesignerEntity::orderBy('entity_type')->orderBy('sort_order')->orderBy('key')->get(),
         ]);
     }
 
@@ -90,7 +98,7 @@ class AdminController
         ]);
         SiteSetting::setValue('default_theme',$data['default_theme'],'string','appearance','الثيم الافتراضي');
         foreach(['force_global_theme','store_enabled','clubs_enabled','tournaments_enabled','chat_enabled','support_enabled','auto_start_game','round_score_popup','table_uploads_enabled','card_back_uploads_enabled','tarneeb_only_panel','large_bot_seats'] as $key) SiteSetting::setValue($key,$r->boolean($key),'bool','modules',$key);
-        SiteSetting::setValue('homepage_headline',$data['homepage_headline'] ?? 'Warqna Zone','string','content','عنوان الصفحة الرئيسية');
+        SiteSetting::setValue('homepage_headline',$data['homepage_headline'] ?? 'Warqnaa','string','content','عنوان الصفحة الرئيسية');
         SiteSetting::setValue('hero_subtitle',$data['hero_subtitle'] ?? 'منصة ألعاب ورق اجتماعية احترافية','string','content','النص الفرعي الرئيسي');
         SiteSetting::setValue('global_announcement',$data['global_announcement'] ?? '','string','content','إعلان عام أعلى الموقع');
         SiteSetting::setValue('maintenance_message',$data['maintenance_message'] ?? '','string','content','رسالة الصيانة');
@@ -137,7 +145,7 @@ class AdminController
         return $r->validate([
             'key'=>($create?'nullable':'nullable').'|string|max:120',
             'name_ar'=>'required|string|max:120','name_en'=>'nullable|string|max:120',
-            'category'=>'required|in:name_color,text_color,pasha,xp_booster,table,badge,card_back,name_frame,effect,emoji_pack',
+            'category'=>'required|in:name_color,text_color,pasha,xp_booster,table,badge,card_back,name_frame,effect,emoji_pack,profile_cover',
             'price'=>'required|integer|min:0|max:999999999','duration_days'=>'nullable|integer|min:1|max:3650',
             'active'=>'nullable|boolean','tab'=>'nullable|string|max:50','tier'=>'nullable|string|max:50','preview_icon'=>'nullable|string|max:40','css_class'=>'nullable|string|max:120','color'=>'nullable|regex:/^#?[0-9a-fA-F]{3,8}$/','multiplier'=>'nullable|numeric|min:1|max:20','emojis'=>'nullable|string|max:400','asset'=>'nullable|image|mimes:jpg,jpeg,png,webp|max:4096',
         ]);
@@ -156,6 +164,7 @@ class AdminController
             $payload['asset_url']='/uploads/cosmetics/'.$name;
             if($r->input('category')==='table') $payload['table_image']='/uploads/cosmetics/'.$name;
             if($r->input('category')==='card_back') $payload['card_back_image']='/uploads/cosmetics/'.$name;
+            if($r->input('category')==='profile_cover') $payload['cover_image']='/uploads/cosmetics/'.$name;
         }
         if($r->filled('css_class')){
             $css=preg_replace('/[^a-zA-Z0-9_\- ]/','',(string)$r->input('css_class'));
@@ -165,6 +174,7 @@ class AdminController
             elseif($cat==='effect') $payload['effect']=$css;
             elseif($cat==='badge') $payload['badge']=$css;
             elseif($cat==='name_frame') $payload['frame']=$css;
+            elseif($cat==='profile_cover') $payload['cover']=$css;
             else $payload['css']=$css;
         }
         if($r->filled('multiplier')) $payload['multiplier']=(float)$r->input('multiplier');
@@ -174,7 +184,7 @@ class AdminController
 
     public function saveDesign(Request $r)
     {
-        $this->guard();
+        $this->guardPrimaryDesigner();
         $numericRules=[
             'ui_button_width'=>[70,360,126],'ui_button_height'=>[32,96,46],'ui_button_radius'=>[0,44,16],'ui_button_font'=>[10,24,14],'ui_button_gap'=>[2,28,8],
             'ui_card_radius'=>[4,54,24],'ui_card_padding'=>[8,44,18],'ui_card_gap'=>[6,34,16],'ui_card_min_height'=>[120,460,220],
@@ -209,6 +219,41 @@ class AdminController
             SiteSetting::setValue($key,$r->boolean($key),'bool','gameplay',$key);
         }
         return back()->with('ok','تم حفظ مصمم الموقع الشامل وتطبيقه على الواجهة والمتجر وغرف اللعب بدون تعديل أكواد');
+    }
+
+
+    public function saveDesignerEntity(Request $r)
+    {
+        $this->guardPrimaryDesigner();
+        $data=$r->validate([
+            'entity_type'=>'required|string|max:80|regex:/^[a-z0-9_-]+$/i',
+            'key'=>'required|string|max:150|regex:/^[a-z0-9_.:-]+$/i',
+            'locale'=>'nullable|string|max:10',
+            'payload_json'=>'required|string|max:1000000',
+            'sort_order'=>'nullable|integer|min:0|max:1000000',
+            'active'=>'nullable|boolean',
+        ]);
+        $payload=json_decode($data['payload_json'],true);
+        if(!is_array($payload)) return back()->withErrors(['payload_json'=>'JSON غير صالح. يجب أن يكون كائناً أو مصفوفة JSON.'])->withInput();
+        $entity=AdminDesignerEntity::firstOrNew([
+            'entity_type'=>strtolower($data['entity_type']),
+            'key'=>$data['key'],
+            'locale'=>$data['locale'] ?? 'all',
+        ]);
+        $entity->payload=$payload;
+        $entity->sort_order=(int)($data['sort_order'] ?? $entity->sort_order ?? 0);
+        $entity->active=$r->boolean('active');
+        $entity->revision=max(1,(int)($entity->revision ?? 0)+1);
+        $entity->updated_by=auth()->id();
+        $entity->save();
+        return back()->with('ok','تم حفظ ونشر عنصر المصمم الشامل.');
+    }
+
+    public function deleteDesignerEntity(AdminDesignerEntity $entity)
+    {
+        $this->guardPrimaryDesigner();
+        $entity->delete();
+        return back()->with('ok','تم حذف العنصر من المصمم الشامل.');
     }
 
     public function createGame(Request $r)
@@ -323,7 +368,7 @@ class AdminController
 
     private function categoryLabels(): array
     {
-        return ['pasha'=>'الباشا','xp_booster'=>'مسرعات XP','table'=>'الطاولات','card_back'=>'ظهر الورق','text_color'=>'ألوان الكتابة','name_color'=>'ألوان اللاعبين وGlow','emoji_pack'=>'الإيموجي','badge'=>'الشارات','effect'=>'مؤثرات الفوز','name_frame'=>'إطارات الاسم'];
+        return ['pasha'=>'الباشا','xp_booster'=>'مسرعات XP','table'=>'الطاولات','card_back'=>'ظهر الورق','text_color'=>'ألوان الكتابة','name_color'=>'ألوان اللاعبين وGlow','emoji_pack'=>'الإيموجي','badge'=>'الشارات','effect'=>'مؤثرات الفوز','name_frame'=>'إطارات الاسم','profile_cover'=>'أغلفة الملف الشخصي','pasha_style'=>'ألوان طربوش الباشا','competition_ticket'=>'تذاكر المنافسات'];
     }
     private function themeOptions(): array
     {

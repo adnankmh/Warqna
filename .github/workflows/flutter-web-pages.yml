@@ -5,6 +5,9 @@ on:
   push:
     branches: [main, master]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
   pages: write
@@ -19,48 +22,81 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Install Flutter
+      - name: Load release metadata
+        id: release
+        run: python3 tools/release_metadata.py --github-output >> "$GITHUB_OUTPUT"
+
+      - name: Validate source package and reject merge markers
+        run: python3 tools/validate_release.py
+
+      - name: Install pinned Flutter SDK
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.44.0'
           channel: stable
           cache: true
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Get Flutter packages
         working-directory: flutter_app
         run: flutter pub get
 
-      - name: Verify corrected controller references
+      - name: Verify additive release contracts
         working-directory: flutter_app
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path('lib/main.dart').read_text(encoding='utf-8')
-          required = [
-              "onPressed: () => showFriends(context, controller)",
-              "onTap: () => showFriends(context, widget.controller)",
-          ]
-          missing = [item for item in required if item not in source]
-          if missing:
-              raise SystemExit('Incorrect controller references in lib/main.dart: ' + repr(missing))
-          print('Controller references are correct.')
-          PY
+          python3 ../tools/test_v171_controller_references.py
+          python3 ../tools/test_v172_brand_table_contract.py
+          python3 ../tools/test_v173_online_engagement_contract.py
+          python3 ../tools/test_v181_ci_regression_contract.py
+          python3 ../tools/test_v182_rewards_contract.py
+          python3 ../tools/test_v183_overhaul_contract.py
+          python3 ../tools/test_v184_flutter_quality_contract.py
+          python3 ../tools/test_v184_official_game_rules_contract.py
+          python3 ../tools/test_v185_world_class_contract.py
+          python3 ../tools/test_v174_offline_progression_navigation_contract.py
+          python3 ../tools/test_v175_xp_challenges_pasha_designer_contract.py
+          python3 ../tools/test_v176_daily_pack_inventory_contract.py
+          python3 ../tools/test_v030_contract.py
+          python3 ../tools/validate_v030_static.py
+          python3 ../tools/test_v02_daily_prize_boxes_contract.py
+
+      - name: Verify Flutter API compatibility contract
+        working-directory: flutter_app
+        run: |
+          python3 ../tools/test_flutter_ci_contract.py
+          python3 ../tools/test_v170_contract.py
 
       - name: Analyze Flutter source
         working-directory: flutter_app
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: bash ../tools/flutter_analyze_ci.sh
+
+      - name: Run engine and widget tests
+        working-directory: flutter_app
+        run: flutter test
 
       - name: Build Flutter Web
         working-directory: flutter_app
+        env:
+          API_URL: ${{ vars.WARQNA_API_URL }}
+          WARQNA_APP_VERSION: ${{ steps.release.outputs.version }}
+          WARQNA_APP_BUILD: ${{ steps.release.outputs.build }}
+          FIREBASE_API_KEY: ${{ vars.FIREBASE_API_KEY }}
+          FIREBASE_APP_ID: ${{ vars.FIREBASE_APP_ID }}
+          FIREBASE_MESSAGING_SENDER_ID: ${{ vars.FIREBASE_MESSAGING_SENDER_ID }}
+          FIREBASE_PROJECT_ID: ${{ vars.FIREBASE_PROJECT_ID }}
         run: |
-          API_URL="${{ vars.WARQNA_API_URL }}"
-          EXTRA_ARGS=()
+          EXTRA_ARGS=("--dart-define=WARQNA_APP_VERSION=$WARQNA_APP_VERSION" "--dart-define=WARQNA_APP_BUILD=$WARQNA_APP_BUILD")
+          EXTRA_ARGS+=("--dart-define=FIREBASE_API_KEY=$FIREBASE_API_KEY" "--dart-define=FIREBASE_APP_ID=$FIREBASE_APP_ID" "--dart-define=FIREBASE_MESSAGING_SENDER_ID=$FIREBASE_MESSAGING_SENDER_ID" "--dart-define=FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID")
           if [ -n "$API_URL" ]; then
-            EXTRA_ARGS+=("--dart-define=WARQNA_API_URL=$API_URL")
+            EXTRA_ARGS+=("--dart-define=WARQNA_API_URL=$API_URL" "--dart-define=WARQNA_PRODUCTION_MODE=true")
+          else
+            EXTRA_ARGS+=("--dart-define=WARQNA_PRODUCTION_MODE=false")
           fi
           flutter build web \
             --release \

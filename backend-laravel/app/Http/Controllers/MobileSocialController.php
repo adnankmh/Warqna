@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{Friendship,Message,Notification,User};
+use App\Models\{Friendship,Message,Notification,Room,User};
 use App\Services\Wallet\WalletService;
+use App\Services\Platform\ProductionConfigService;
+use App\Services\Notifications\FirebasePushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -40,10 +42,44 @@ class MobileSocialController extends Controller
         return response()->json(['ok' => true, 'users' => $users->map(fn ($u) => $this->userPayload($u))]);
     }
 
-    public function request(Request $request, User $user)
+    public function profile(Request $request, User $user)
+    {
+        $this->assertNotBlocked($request->user()->id, $user->id);
+        return response()->json(['ok' => true, 'user' => $this->userPayload($user->load('profile'))]);
+    }
+
+    public function inviteToRoom(Request $request, User $user, FirebasePushService $push)
+    {
+        $this->assertFriends($request->user()->id, $user->id);
+        $data = $request->validate(['room_code' => 'required|string|max:20']);
+        $room = Room::where('code', strtoupper($data['room_code']))->whereIn('status', ['waiting','bidding','playing'])->firstOrFail();
+        abort_unless((int)$room->owner_id === (int)$request->user()->id || $room->players()->where('user_id', $request->user()->id)->exists(), 403, 'يجب أن تكون داخل الغرفة لإرسال الدعوة.');
+        Notification::create(['user_id'=>$user->id,'type'=>'room_invite','title'=>['ar'=>'دعوة لعبة','en'=>'Game invitation'],'body'=>['ar'=>$request->user()->username.' دعاك إلى غرفة '.$room->code,'en'=>$request->user()->username.' invited you to room '.$room->code],'meta'=>['room_code'=>$room->code,'from'=>$request->user()->id]]);
+        $push->sendToUser($user, 'دعوة لعبة', $request->user()->username.' دعاك إلى غرفة '.$room->code, ['route'=>'room:'.$room->code,'type'=>'room_invite','room_code'=>$room->code,'sender_id'=>$request->user()->id]);
+        return response()->json(['ok'=>true,'message'=>'تم إرسال الدعوة حتى لو كان اللاعب خارج التطبيق.']);
+    }
+
+    public function inviteAllToRoom(Request $request, FirebasePushService $push)
+    {
+        $data = $request->validate(['room_code' => 'required|string|max:20']);
+        $room = Room::where('code', strtoupper($data['room_code']))->whereIn('status', ['waiting','bidding','playing'])->firstOrFail();
+        abort_unless((int)$room->owner_id === (int)$request->user()->id || $room->players()->where('user_id', $request->user()->id)->exists(), 403);
+        $relations = Friendship::where('status','accepted')->where(fn($q)=>$q->where('requester_id',$request->user()->id)->orWhere('addressee_id',$request->user()->id))->get();
+        $sent=0;
+        foreach($relations as $relation){
+            $id=(int)$relation->requester_id===(int)$request->user()->id ? (int)$relation->addressee_id : (int)$relation->requester_id;
+            $friend=User::find($id); if(!$friend) continue;
+            $push->sendToUser($friend, 'دعوة جماعية للعبة', $request->user()->username.' دعاك إلى غرفة '.$room->code, ['route'=>'room:'.$room->code,'type'=>'room_invite','room_code'=>$room->code,'sender_id'=>$request->user()->id]);
+            Notification::create(['user_id'=>$friend->id,'type'=>'room_invite','title'=>['ar'=>'دعوة لعبة','en'=>'Game invitation'],'body'=>['ar'=>$request->user()->username.' دعاك إلى غرفة '.$room->code],'meta'=>['room_code'=>$room->code,'from'=>$request->user()->id]]); $sent++;
+        }
+        return response()->json(['ok'=>true,'message'=>'تم إرسال الدعوة إلى '.$sent.' صديق.','sent'=>$sent]);
+    }
+
+    public function request(Request $request, User $user, FirebasePushService $push)
     {
         $me = $request->user();
         abort_if($me->id === $user->id, 422, 'لا يمكنك إرسال طلب لنفسك');
+        $this->assertNotBlocked($me->id, $user->id);
         $existing = $this->relation($me->id, $user->id);
         if ($existing) {
             return response()->json(['ok' => false, 'message' => 'توجد علاقة أو دعوة سابقة مع هذا اللاعب', 'status' => $existing->status], 409);
@@ -56,10 +92,16 @@ class MobileSocialController extends Controller
             'body' => ['ar' => $me->username . ' أرسل لك طلب صداقة', 'en' => $me->username . ' sent you a friend request'],
             'meta' => ['friendship_id' => $friendship->id, 'from' => $me->id],
         ]);
+        $push->sendToUser($user, 'طلب صداقة جديد', $me->username.' أرسل لك طلب صداقة.', [
+            'route' => 'friends',
+            'type' => 'friend_request',
+            'friendship_id' => $friendship->id,
+            'sender_id' => $me->id,
+        ]);
         return response()->json(['ok' => true, 'message' => 'تم إرسال طلب الصداقة', 'friendship' => $friendship], 201);
     }
 
-    public function respond(Request $request, Friendship $friendship)
+    public function respond(Request $request, Friendship $friendship, FirebasePushService $push)
     {
         abort_unless($friendship->addressee_id === $request->user()->id && $friendship->status === 'pending', 403);
         $data = $request->validate(['status' => 'required|in:accepted,rejected']);
@@ -74,6 +116,16 @@ class MobileSocialController extends Controller
             'title' => ['ar' => 'رد على طلب الصداقة', 'en' => 'Friend request response'],
             'body' => ['ar' => $request->user()->username . ($data['status'] === 'accepted' ? ' قبل طلب الصداقة' : ' رفض طلب الصداقة')],
         ]);
+        $requester = User::find($friendship->requester_id);
+        if ($requester) {
+            $resultText = $data['status'] === 'accepted' ? 'قبل طلب صداقتك.' : 'رفض طلب صداقتك.';
+            $push->sendToUser($requester, 'رد على طلب الصداقة', $request->user()->username.' '.$resultText, [
+                'route' => 'friends',
+                'type' => 'friend_response',
+                'sender_id' => $request->user()->id,
+                'status' => $data['status'],
+            ]);
+        }
         return response()->json(['ok' => true, 'message' => $data['status'] === 'accepted' ? 'تم قبول الطلب' : 'تم رفض الطلب']);
     }
 
@@ -128,7 +180,7 @@ class MobileSocialController extends Controller
         ]);
     }
 
-    public function send(Request $request, User $user)
+    public function send(Request $request, User $user, FirebasePushService $push)
     {
         $this->assertFriends($request->user()->id, $user->id);
         $data = $request->validate(['body' => 'required|string|max:1000']);
@@ -142,39 +194,50 @@ class MobileSocialController extends Controller
             'body' => ['ar' => $request->user()->username . ' أرسل لك رسالة'],
             'meta' => ['sender_id' => $request->user()->id],
         ]);
+        $preview = mb_strlen($body) > 100 ? mb_substr($body, 0, 97).'…' : $body;
+        $push->sendToUser($user, $request->user()->username, $preview, [
+            'route' => 'friend-chat:'.$request->user()->id,
+            'type' => 'private_message',
+            'sender_id' => $request->user()->id,
+            'message_id' => $message->id,
+        ]);
         return response()->json(['ok' => true, 'message' => ['id' => $message->id, 'mine' => true, 'body' => $message->body, 'time' => $message->created_at?->format('H:i')]], 201);
     }
 
-    public function transfer(Request $request, WalletService $wallet)
+    public function transfer(Request $request, WalletService $wallet, ProductionConfigService $productionConfig)
     {
-        $data = $request->validate(['receiver' => 'required|string|max:120', 'amount' => 'required|integer|min:1|max:1000000000000']);
+        abort_unless($productionConfig->enabled('token_transfers', true), 503, 'تحويل التوكنز متوقف مؤقتًا.');
+        $data = $request->validate(['receiver' => 'required|string|max:120', 'amount' => 'required|integer|min:10|max:1000000000000']);
         $sender = $request->user();
         $receiver = User::where('username', $data['receiver'])->orWhere('email', $data['receiver'])->first();
         abort_unless($receiver, 404, 'لم يتم العثور على المستلم');
         abort_if($receiver->id === $sender->id, 422, 'لا يمكنك التحويل لنفسك');
-        $fee = (int) ceil(((int) $data['amount']) * 0.10);
+        $feePercent = max(0, min(100, (int) data_get($productionConfig->flags(), 'token_transfers.payload.fee_percent', config('warqna.token_transfer_fee_percent', 10))));
+        $fee = (int) ceil(((int) $data['amount']) * ($feePercent / 100));
         $total = (int) $data['amount'] + $fee;
 
         try {
-            DB::transaction(function () use ($wallet, $sender, $receiver, $data, $fee) {
-                $wallet->debit($sender, (int) $data['amount'] + $fee, 'transfer_sent', ['to' => $receiver->id, 'fee_percent' => 10, 'fee' => $fee]);
+            DB::transaction(function () use ($wallet, $sender, $receiver, $data, $fee, $feePercent) {
+                $wallet->debit($sender, (int) $data['amount'] + $fee, 'transfer_sent', ['to' => $receiver->id, 'fee_percent' => $feePercent, 'fee' => $fee]);
                 $wallet->credit($receiver, (int) $data['amount'], 'transfer_received', ['from' => $sender->id]);
                 $admin = User::where('username', 'Adnan')->where('is_admin', true)->first() ?: User::where('is_admin', true)->first();
                 if ($admin && $fee > 0) {
-                    $wallet->credit($admin, $fee, 'transfer_fee', ['from' => $sender->id, 'to' => $receiver->id, 'fee_percent' => 10]);
+                    $wallet->credit($admin, $fee, 'transfer_fee', ['from' => $sender->id, 'to' => $receiver->id, 'fee_percent' => $feePercent]);
                 }
             });
         } catch (\Throwable) {
-            return response()->json(['ok' => false, 'message' => 'الرصيد غير كافٍ. المطلوب مع عمولة الإدارة: ' . number_format($total)], 422);
+            return response()->json(['ok' => false, 'message' => 'الرصيد غير كافٍ. المطلوب مع رسوم التحويل: ' . number_format($total)], 422);
         }
+
+        $freshWallet = $sender->wallet()->firstOrFail();
 
         return response()->json([
             'ok' => true,
-            'message' => 'تم إرسال ' . number_format((int) $data['amount']) . ' توكنز، وخصم عمولة إدارة 10% بقيمة ' . number_format($fee) . '.',
+            'message' => 'تم إرسال ' . number_format((int) $data['amount']) . ' توكنز، وخصم رسوم تحويل ' . $feePercent . '% بقيمة ' . number_format($fee) . '.',
             'amount' => (int) $data['amount'],
             'fee' => $fee,
             'total_debited' => $total,
-            'wallet' => $sender->wallet()->fresh(),
+            'wallet' => $freshWallet,
         ]);
     }
 
@@ -204,6 +267,7 @@ class MobileSocialController extends Controller
     {
         if (!$user) return [];
         $profile = $user->profile;
+        $membership = $user->clubMembership()->with('club')->first();
         return [
             'id' => $user->id,
             'username' => $user->username,
@@ -211,10 +275,34 @@ class MobileSocialController extends Controller
             'avatar' => $profile?->avatar,
             'level' => (int) ($profile?->level ?? 1),
             'country_code' => $profile?->country_code ?: 'PS',
+            'country_name' => $profile?->country_name ?: country_name($profile?->country_code ?: 'PS'),
+            'flag' => (string)(config('countries.'.safe_country_code($profile?->country_code ?: 'PS').'.flag') ?? '🇵🇸'),
             'name_color' => $profile?->name_color ?: '#facc15',
             'badge' => $profile?->badge,
+            'pasha_days' => (int) ($profile?->pasha_days ?? 0),
+            'games_played' => (int) ($profile?->games_played ?? 0),
+            'wins' => (int) ($profile?->wins ?? 0),
+            'round_points' => (int) ($profile?->round_points ?? 0),
+            'tournament_points' => (int) ($profile?->tournament_points ?? 0),
+            'club_points' => (int) ($profile?->club_points ?? 0),
+            'club' => $membership?->club ? [
+                'id' => $membership->club->id,
+                'name' => $membership->club->name,
+                'logo' => $membership->club->logo,
+                'level' => (int) $membership->club->level,
+                'role' => $membership->role,
+            ] : null,
             'online' => $user->last_seen_at?->gt(now()->subMinutes(3)) ?? false,
         ];
+    }
+
+    private function assertNotBlocked(int $a, int $b): void
+    {
+        $blocked = Friendship::where('status','blocked')->where(function ($q) use ($a,$b) {
+            $q->where(fn($q)=>$q->where('requester_id',$a)->where('addressee_id',$b))
+              ->orWhere(fn($q)=>$q->where('requester_id',$b)->where('addressee_id',$a));
+        })->exists();
+        abort_if($blocked, 403, 'لا يمكن التواصل أو اللعب مع لاعب موجود في قائمة الحظر.');
     }
 
     private function cleanChat(string $body): string
