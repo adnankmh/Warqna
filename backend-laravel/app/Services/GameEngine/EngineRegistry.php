@@ -8,6 +8,14 @@ namespace App\Services\GameEngine;
  */
 final class EngineRegistry
 {
+    /** The exact product catalog shown by the Flutter client. */
+    public const PRODUCT_KEYS = [
+        'tarneeb','trix','hand','banakil','baloot','basra',
+        'tarneeb_400','syrian_tarneeb','trix_complex','saudi_hand',
+        'hand_partner','trix_partner','tarneeb_41','tarneeb_61',
+        'pinochle','solitaire_multiplayer','domino','backgammon',
+    ];
+
     /** @return array<string,array<string,mixed>> */
     public static function all(): array
     {
@@ -27,13 +35,13 @@ final class EngineRegistry
             'tarneeb_400' => self::entry('طرنيب 400','Tarneeb 400','global_tarneeb_400_final_v1',4,4,true,13,52,['bid','pass','play_card'],
                 'لعبة شراكة لبنانية بنظام 400: الكبة هي الطرنيب الثابت، ويحسب طلب كل لاعب بصورة مستقلة، والفوز عند تحقق شرط 41 داخل الفريق.',
                 'Lebanese 400-style partnership play with Hearts as fixed trump, individual declarations and the 41-point team victory condition.'),
-            'trix' => self::entry('تركس','Trix','global_trix_final_v1',4,4,false,13,52,['choose_contract','play_card'],
+            'trix' => self::entry('تركس','Trix','global_trix_v186',4,4,false,13,52,['choose_contract','double_card','finish_doubling','play_card'],
                 'أربع ممالك لكل لاعب، ويختار صاحب المملكة واحدة من خمس طلبات: شيخ الكبة، بنات، ديناري، لطوش أو تركس. الفوز للأعلى نقاطاً بعد اكتمال الممالك.',
                 'Each player owns a kingdom and selects one of five contracts. The highest total score after all kingdoms wins.'),
-            'trix_partner' => self::entry('تركس شراكة','Partnership Trix','global_trix_partner_final_v1',4,4,true,13,52,['choose_contract','play_card'],
+            'trix_partner' => self::entry('تركس شراكة','Partnership Trix','global_trix_partner_v186',4,4,true,13,52,['choose_contract','double_card','finish_doubling','play_card'],
                 'قواعد تركس مع فريقين متقابلين، وتجمع نقاط الشريكين معاً.',
                 'Trix rules played by two opposing partnerships; partners combine their scores.'),
-            'trix_complex' => self::entry('تركس كمبلكس','Trix Complex','global_trix_complex_final_v1',4,4,false,13,52,['choose_contract','play_card'],
+            'trix_complex' => self::entry('تركس كمبلكس','Trix Complex','global_trix_complex_v186',4,4,false,13,52,['choose_contract','double_card','finish_doubling','play_card'],
                 'يجمع الكمبلكس عقوبات شيخ الكبة والبنات والديناري واللطوش في طلب واحد، مع طلب تركس منفصل حسب النمط.',
                 'Complex combines King of Hearts, Queens, Diamonds and Tricks penalties into one contract, with Trix handled separately.'),
             'hand' => self::entry('هاند','Hand','global_saudi_hand_final_v1',2,5,false,14,106,['draw_deck','draw_discard','meld','discard'],
@@ -51,10 +59,10 @@ final class EngineRegistry
             'pinochle' => self::entry('بناكل كلاسيك','Classic Banakil','global_banakil_classic_final_v1',2,4,true,18,106,['draw_deck','draw_discard','meld','layoff','discard','organize'],
                 'نسخة البناكل الكلاسيكية بهدف 222 نقطة للشراكة أو 150 للمواجهة الفردية.',
                 'Classic Banakil to 222 points in partnerships or 150 in one-versus-one play.'),
-            'solitaire_multiplayer' => self::entry('سوليتير تنافسي','Competitive Solitaire','global_competitive_solitaire_final_v1',2,4,false,13,52,['draw','play_card','move_card'],
-                'سباق سوليتير متزامن؛ يفوز من ينهي أساساته أولاً وفق الحركات القانونية.',
-                'Synchronized competitive solitaire; the first player to complete legal foundations wins.'),
-            'baloot' => self::entry('بلوت','Baloot','global_baloot_final_v1',4,4,true,8,32,['bid','pass','choose_trump','play_card'],
+            'solitaire_multiplayer' => self::entry('سوليتير تنافسي','Competitive Solitaire','global_competitive_solitaire_v186',2,4,false,0,52,['draw_stock','recycle_stock','move_to_foundation','move_to_tableau'],
+                'سباق سوليتير متعاقب عادل؛ لكل لاعب رزمة مستقلة وسبعة أعمدة وستوك وويست وأربعة أسس؛ ويفوز أول من يكمل 52 ورقة.',
+                'Fair turn-based competitive Klondike: every player has an independent deck, seven columns, stock, waste and four foundations; the first to place all 52 cards wins.'),
+            'baloot' => self::entry('بلوت','Baloot','global_baloot_v186',4,4,true,8,32,['pass','choose_contract','play_card'],
                 'أربعة لاعبين بفريقين، 32 ورقة، شراء صن أو حكم ثم لعب اللمّات مع ترتيب وقيم مختلفة بين الصن والحكم.',
                 'Four players in partnerships using 32 cards; bidding selects Sun or Hokm, each with its own rank and scoring order.'),
             'basra' => self::entry('باصرة','Basra','universal_basra_rules',2,2,false,4,52,['play_card','capture'],
@@ -63,15 +71,9 @@ final class EngineRegistry
             'domino' => self::entry('دومينو','Domino','dedicated_domino_v142',2,4,false,7,28,['play_tile','draw','pass'],
                 'محرك دومينو مخصص بمجموعة 28 حجرًا فريدة والتحقق من الطرف المفتوح والسحب والتمرير.',
                 'Dedicated domino engine with 28 unique tiles, open-end validation, drawing and passing.'),
-            'backgammon' => self::entry('طاولة الزهر','Backgammon','dedicated_backgammon_v142',2,2,false,15,30,['roll_dice','move'],
+            'backgammon' => self::entry('طاولة الزهر','Backgammon','dedicated_backgammon_v186',2,2,false,15,30,['roll','move','pass'],
                 'محرك طاولة زهر يتحقق من اتجاه الحركة، النرد، أولوية دخول الأحجار من البار والإخراج.',
                 'Backgammon engine validates movement direction, dice, bar-entry priority and bearing off.'),
-            'jackaroo' => self::entry('جاكارو','Jackaroo','dedicated_jackaroo_v142',4,4,true,4,52,['play_card','move_token'],
-                'جاكارو بأربعة لاعبين وفريقين مع إخراج الأحجار وتحريكها حسب قيمة الورقة.',
-                'Four-player partnership Jackaroo with card-driven marble release and movement.'),
-            'chess' => self::entry('شطرنج','Chess','dedicated_chess_v142',2,2,false,16,32,['move'],
-                'شطرنج كامل يتحقق من الحركات القانونية والتبييت والأخذ بالتجاوز.',
-                'Chess engine validates legal moves, castling and en-passant.'),
         ];
     }
 
@@ -83,6 +85,8 @@ final class EngineRegistry
             'rules'=>['ar'=>$rulesAr,'en'=>$rulesEn],
             'server_authoritative'=>true,
             'free_play'=>true,
+            'rules_version'=>'warqnaa-2026.07-v186',
+            'core_rules_complete'=>true,
             'fair_shuffle'=>'server_seeded_shuffle_with_unique_deck_validation',
         ];
     }

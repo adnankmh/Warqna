@@ -1,0 +1,23 @@
+{
+  "version": "0.3.5",
+  "build": 186,
+  "display": "V0.3.5",
+  "type": "audited-18-game-engine-core",
+  "name": "Warqnaa V0.3.5 Audited 18-Game Engine Core",
+  "features": [
+    "exact 18-game contract shared by Flutter, Laravel catalog and engine registry",
+    "fail-closed game factory for forged or unsupported game identifiers",
+    "server-authoritative structured-payload validation",
+    "transactional action and timeout state transitions with row locks and revisions",
+    "independent complete Klondike deck for every competitive-solitaire player",
+    "audited Hand opening, discard cycle, layoff scope and five-round scoring",
+    "staged Baloot buying deal and corrected game targets",
+    "maximum-dice-use enforcement in Backgammon",
+    "all V185 tables, store, rewards, clubs, voice and progression features preserved"
+  ],
+  "catalog": {
+    "playable_games": 18,
+    "future_engines_hidden": ["jackaroo", "chess"],
+    "rules_profile": "warqnaa-2026.07-v186"
+  }
+}

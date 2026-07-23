@@ -84,11 +84,7 @@ def main() -> None:
     read(
         'backend-laravel/tools/test-v184-engine-stress.php',
         'engine stress scenarios completed',
-        "'syrian_tarneeb'",
-        "'hand_partner'",
-        "'baloot'",
-        "'jackaroo'",
-        "'chess'",
+        'EngineRegistry::PRODUCT_KEYS',
     )
 
     workflow_needles = {

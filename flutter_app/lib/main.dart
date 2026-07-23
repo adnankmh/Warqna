@@ -6527,6 +6527,7 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
     if (widget.game.id == 'chess' && state['board'] is Map) return _chessBoard(Map<String, dynamic>.from(state['board'] as Map));
     if (widget.game.id == 'backgammon' && state['points'] is Map) return _backgammonBoard(Map<String, dynamic>.from(state['points'] as Map));
     if (widget.game.id == 'jackaroo' && state['pieces'] is Map) return _jackarooBoard(Map<String, dynamic>.from(state['pieces'] as Map));
+    if (widget.game.id == 'solitaire_multiplayer' && state['tableau'] is Map) return _solitaireBoard();
     final visible = trickCards.isNotEmpty ? trickCards : table.map((card) => {'card': card, 'name': ''}).toList();
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -6656,6 +6657,53 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
       ),
     );
   }
+
+  Widget _solitaireBoard() {
+    final you = state['you']?.toString() ?? '';
+    final tableauMap = state['tableau'] is Map ? Map<String, dynamic>.from(state['tableau'] as Map) : <String, dynamic>{};
+    final rawColumns = tableauMap[you];
+    final columns = rawColumns is List ? rawColumns : const [];
+    final wasteMap = state['waste'] is Map ? Map<String, dynamic>.from(state['waste'] as Map) : <String, dynamic>{};
+    final waste = wasteMap[you] is List ? wasteMap[you] as List : const [];
+    final foundationMap = state['foundation'] is Map ? Map<String, dynamic>.from(state['foundation'] as Map) : <String, dynamic>{};
+    final foundation = foundationMap[you] is Map ? Map<String, dynamic>.from(foundationMap[you] as Map) : <String, dynamic>{};
+    final stockMap = state['stock_counts'] is Map ? Map<String, dynamic>.from(state['stock_counts'] as Map) : <String, dynamic>{};
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _solitairePile('ستوك', '🂠', int.tryParse(stockMap[you]?.toString() ?? '') ?? 0),
+          const SizedBox(width: 8),
+          _solitairePile('ويست', waste.isEmpty ? '—' : _cardLabel(waste.last.toString()), waste.length),
+          const SizedBox(width: 18),
+          for (final suit in const ['C', 'D', 'S', 'H']) ...[
+            _solitairePile(_cardLabel('A_$suit'), foundation[suit] is List && (foundation[suit] as List).isNotEmpty ? _cardLabel((foundation[suit] as List).last.toString()) : _cardLabel('A_$suit'), foundation[suit] is List ? (foundation[suit] as List).length : 0),
+            const SizedBox(width: 4),
+          ],
+        ]),
+        const SizedBox(height: 10),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          for (var index = 0; index < columns.length; index++)
+            Expanded(child: Builder(builder: (_) {
+              final column = columns[index] is Map ? Map<String, dynamic>.from(columns[index] as Map) : <String, dynamic>{};
+              final up = column['up'] is List ? column['up'] as List : const [];
+              final down = int.tryParse(column['down_count']?.toString() ?? '') ?? 0;
+              return Column(children: [
+                if (down > 0) Container(height: 30, margin: const EdgeInsets.all(1), alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xff173c62), borderRadius: BorderRadius.circular(5)), child: Text('🂠 $down', style: const TextStyle(fontSize: 9))),
+                for (final card in up) Padding(padding: const EdgeInsets.only(top: 2), child: PlayingCard(label: _cardLabel(card.toString()), width: 34, height: 50)),
+              ]);
+            })),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _solitairePile(String label, String value, int count) => Container(
+    width: 54,
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white12)),
+    child: Column(children: [Text(value, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13)), Text('$label • $count', style: const TextStyle(fontSize: 7, color: Colors.white60))]),
+  );
 
   Widget _jackarooBoard(Map<String, dynamic> pieces) {
     return ConstrainedBox(
@@ -6794,9 +6842,16 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
       widgets.add(FilledButton.tonal(onPressed: sending ? null : () => _chooseServerTrump(suits), child: const Text('اختيار الحكم')));
     }
 
-    final contracts = availableActions.where((item) => item['type'] == 'choose_contract').map((item) => item['contract']?.toString()).whereType<String>().toSet().toList();
-    if (contracts.isNotEmpty || enginePhase.contains('contract')) {
-      widgets.add(FilledButton.tonal(onPressed: sending ? null : () => _chooseContract(contracts), child: const Text('اختيار العقد')));
+    final contractActions = availableActions.where((item) => item['type'] == 'choose_contract').map((item) => Map<String, dynamic>.from(item)).toList();
+    if (contractActions.isNotEmpty || enginePhase.contains('contract')) {
+      widgets.add(FilledButton.tonal(onPressed: sending ? null : () => _chooseContract(contractActions), child: const Text('اختيار العقد')));
+    }
+    final doubleActions = availableActions.where((item) => item['type'] == 'double_card').map((item) => Map<String, dynamic>.from(item)).toList();
+    if (doubleActions.isNotEmpty) {
+      widgets.add(FilledButton.icon(onPressed: sending ? null : () => _chooseTrixDouble(doubleActions), icon: const Icon(Icons.exposure_plus_2), label: const Text('تدبيل ورقة')));
+    }
+    if (types.contains('finish_doubling')) {
+      widgets.add(OutlinedButton(onPressed: sending ? null : () => _action('finish_doubling'), child: const Text('إنهاء التدبيل')));
     }
 
     if (types.contains('draw_deck') || (availableActions.isEmpty && enginePhase == 'draw')) {
@@ -6807,6 +6862,13 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
     }
     if (types.contains('draw_stock')) {
       widgets.add(FilledButton.tonal(onPressed: sending ? null : () => _action('draw_stock'), child: const Text('سحب ورقة')));
+    }
+    if (types.contains('recycle_stock')) {
+      widgets.add(OutlinedButton(onPressed: sending ? null : () => _action('recycle_stock'), child: const Text('إعادة الويست')));
+    }
+    final solitaireMoves = availableActions.where((item) => {'move_to_foundation', 'move_to_tableau'}.contains(item['type']?.toString())).map((item) => Map<String, dynamic>.from(item)).toList();
+    if (solitaireMoves.isNotEmpty) {
+      widgets.add(FilledButton.icon(onPressed: sending ? null : () => _chooseSolitaireMove(solitaireMoves), icon: const Icon(Icons.auto_awesome_motion), label: const Text('حركة سوليتير')));
     }
     if (types.contains('organize')) {
       widgets.add(OutlinedButton.icon(onPressed: sending ? null : () => _action('organize'), icon: const Icon(Icons.auto_awesome, size: 17), label: const Text('ترتيب ذكي')));
@@ -6886,8 +6948,10 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
     if (suit != null) _action('choose_trump', {'suit': suit});
   }
 
-  Future<void> _chooseContract(List<String> values) async {
-    final options = values.isEmpty ? const ['king_hearts', 'girls', 'diamonds', 'tricks', 'trix', 'complex', 'sun', 'hokm'] : values;
+  Future<void> _chooseContract(List<Map<String, dynamic>> actions) async {
+    final options = actions.isEmpty
+        ? const <Map<String, dynamic>>[{'contract':'king_hearts'},{'contract':'girls'},{'contract':'diamonds'},{'contract':'tricks'},{'contract':'trix'},{'contract':'complex'},{'contract':'sun'},{'contract':'hokm'}]
+        : actions;
     const labels = {
       'king_hearts': 'شيخ الكبة',
       'girls': 'البنات',
@@ -6898,12 +6962,55 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
       'complex': 'كمبلكس',
       'sun': 'صن',
       'hokm': 'حكم',
+      'confirm_hokm': 'تثبيت الحكم',
+      'second_hokm': 'حكم ثاني',
     };
-    final contract = await showDialog<String>(context: context, builder: (dialogContext) => AlertDialog(
+    final selected = await showDialog<Map<String, dynamic>>(context: context, builder: (dialogContext) => AlertDialog(
       title: const Text('اختر العقد المتاح'),
-      content: Wrap(spacing: 6, runSpacing: 6, children: options.map((value) => FilledButton.tonal(onPressed: () => Navigator.pop(dialogContext, value), child: Text(labels[value] ?? value))).toList()),
+      content: Wrap(spacing: 6, runSpacing: 6, children: options.map((item) {
+        final value = item['contract']?.toString() ?? '';
+        final suit = item['suit']?.toString();
+        final suitLabel = suit == null || suit.isEmpty ? '' : ' ${_cardLabel('A_$suit').replaceFirst('A', '')}';
+        return FilledButton.tonal(onPressed: () => Navigator.pop(dialogContext, item), child: Text('${labels[value] ?? value}$suitLabel'));
+      }).toList()),
     ));
-    if (contract != null) _action('choose_contract', {'contract': contract});
+    if (selected != null) _action('choose_contract', {'contract': selected['contract'], if (selected['suit'] != null) 'suit': selected['suit']});
+  }
+
+  Future<void> _chooseSolitaireMove(List<Map<String, dynamic>> moves) async {
+    final selected = await showDialog<Map<String, dynamic>>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('اختر حركة سوليتير قانونية'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 430),
+        child: ListView.separated(
+          shrinkWrap: true,
+          itemCount: moves.length,
+          separatorBuilder: (_, __) => const Divider(height: 1),
+          itemBuilder: (_, index) {
+            final move = moves[index];
+            final type = move['type']?.toString() ?? '';
+            final card = _cardLabel(move['card']?.toString() ?? '');
+            final subtitle = type == 'move_to_foundation' ? 'إلى الأساس' : 'إلى العمود ${(int.tryParse(move['to_column']?.toString() ?? '') ?? 0) + 1}';
+            return ListTile(leading: PlayingCard(label: card, width: 31, height: 46), title: Text(card), subtitle: Text(subtitle), onTap: () => Navigator.pop(dialogContext, move));
+          },
+        ),
+      ),
+    ));
+    if (selected == null) return;
+    final type = selected['type']?.toString() ?? '';
+    final payload = Map<String, dynamic>.from(selected)..remove('type');
+    _action(type, payload);
+  }
+
+  Future<void> _chooseTrixDouble(List<Map<String, dynamic>> actions) async {
+    final selected = await showDialog<Map<String, dynamic>>(context: context, builder: (dialogContext) => AlertDialog(
+      title: const Text('اختر الورقة التي تريد تدبيلها'),
+      content: Wrap(spacing: 8, runSpacing: 8, children: actions.map((action) {
+        final card = action['card']?.toString() ?? '';
+        return FilledButton.tonal(onPressed: () => Navigator.pop(dialogContext, action), child: Text(_cardLabel(card), style: const TextStyle(fontSize: 20)));
+      }).toList()),
+    ));
+    if (selected != null) _action('double_card', {'card': selected['card']});
   }
 
   Future<void> _chooseMeld(List<Map<String, dynamic>> melds) async {

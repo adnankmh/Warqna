@@ -107,11 +107,13 @@ def check_required_files() -> None:
         "tools/test_v184_flutter_quality_contract.py",
         "tools/test_v184_official_game_rules_contract.py",
         "tools/test_v185_world_class_contract.py",
+        "tools/test_v186_engine_integrity_contract.py",
         "flutter_app/lib/v185_world_class.dart",
         "flutter_app/assets/images/tables/reference/reference_catalog_v185.png",
         "backend-laravel/tests/Feature/V185WorldClassTableStoreTest.php",
         "backend-laravel/tools/test-v184-official-rules-audit.php",
         "backend-laravel/tools/test-v184-engine-stress.php",
+        "backend-laravel/tools/test-v186-engine-integrity.php",
         "tools/test_v02_daily_prize_boxes_contract.py",
         "flutter_app/lib/v176_release.dart",
         "flutter_app/lib/v02_release.dart",
@@ -550,19 +552,21 @@ def check_product_contract_tests() -> None:
     # Count only top-level catalog entries in the literal return block.
     block = catalog.split("return [", 1)[1].split("];", 1)[0]
     keys = re.findall(r"(?m)^\s{12}'([a-z0-9_]+)'\s*=>\s*\[", block)
-    expected = [
-        "tarneeb", "syrian_tarneeb", "tarneeb_400", "trix", "trix_partner",
-        "trix_complex", "hand", "hand_partner", "saudi_hand", "banakil", "baloot", "basra",
-    ]
-    if keys != expected:
-        fail(f"Current curated game contract changed unexpectedly: {keys}")
+    expected = {
+        "tarneeb", "trix", "hand", "banakil", "baloot", "basra",
+        "tarneeb_400", "syrian_tarneeb", "trix_complex", "saudi_hand",
+        "hand_partner", "trix_partner", "tarneeb_41", "tarneeb_61",
+        "pinochle", "solitaire_multiplayer", "domino", "backgammon",
+    }
+    if set(keys) != expected or len(keys) != 18:
+        fail(f"Current audited 18-game contract changed unexpectedly: {keys}")
 
     require("backend-laravel/tests/Feature/V122CatalogAndEnginesTest.php", [
-        "$this->assertSame($expected,array_keys($games));",
-        "'domino','ludo','jackaroo','chess'",
+        "$this->assertSame($expected,$actual);",
+        "EngineRegistry::PRODUCT_KEYS",
     ])
     require("backend-laravel/tests/Feature/V131PremiumFinalFixesTest.php", [
-        "assertCount(12,GameCatalog::all())",
+        "assertCount(18,GameCatalog::all())",
     ])
     require("backend-laravel/tests/Feature/V128StoreGameplayNavTest.php", [
         "assertCount(140,$service->tableSkins())",
@@ -587,7 +591,7 @@ def check_product_contract_tests() -> None:
     for rel, needle in stale_patterns:
         if needle in read(rel):
             fail(f"Stale historical test contract remains in {rel}: {needle}")
-    print("[OK] Current 12-game, 140-table (50 legacy + 40 v172 + 50 v173), 40-card-back product contract")
+    print("[OK] Current audited 18-game, 140-table (50 legacy + 40 v172 + 50 v173), 40-card-back product contract")
 
 
 def check_release_and_wallet_regressions() -> None:
@@ -1367,6 +1371,28 @@ def check_v185_world_class_contract() -> None:
     print(result.stdout.strip())
     print("[OK] v185 responsive table marketplace and server-authoritative store activation")
 
+
+def check_v186_engine_integrity_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/test_v186_engine_integrity_contract.py")],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        fail("Warqna v186 18-engine contract failed: " + result.stdout.strip())
+    for rel in [
+        ".github/workflows/flutter-web-pages.yml",
+        ".github/workflows/flutter-android.yml",
+        ".github/workflows/flutter-ios.yml",
+        ".github/workflows/production-release-check.yml",
+    ]:
+        require(rel, ["test_v186_engine_integrity_contract.py"])
+    require(".github/workflows/backend-ci.yml", ["test-v186-engine-integrity.php"])
+    print(result.stdout.strip())
+    print("[OK] v186 exact 18-game engine, fail-closed, privacy and concurrency contract")
+
 def check_v02_daily_prize_boxes_contract() -> None:
     result = subprocess.run(
         [sys.executable, str(ROOT / "tools/test_v02_daily_prize_boxes_contract.py")],
@@ -1438,6 +1464,7 @@ def main() -> None:
     check_v176_daily_pack_inventory_contract()
     check_v184_official_game_rules_contract()
     check_v185_world_class_contract()
+    check_v186_engine_integrity_contract()
     check_secrets()
     check_dart_structure()
     print(f"[PASS] Warqna v{EXPECTED_BUILD} source-package preflight completed successfully")

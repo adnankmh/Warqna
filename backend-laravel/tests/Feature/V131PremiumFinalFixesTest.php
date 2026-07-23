@@ -9,11 +9,11 @@ use App\Services\GameEngine\DeckFactory;
 
 class V131PremiumFinalFixesTest extends TestCase
 {
-    public function test_only_current_12_curated_games_are_available(): void
+    public function test_all_current_18_audited_games_are_available(): void
     {
-        $this->assertCount(12,GameCatalog::all());
-        foreach(['tarneeb','hand','baloot','basra'] as $key) $this->assertArrayHasKey($key,GameCatalog::all());
-        foreach(['chess','backgammon','domino','jackaroo'] as $key) $this->assertArrayNotHasKey($key,GameCatalog::all());
+        $this->assertCount(18,GameCatalog::all());
+        foreach(['tarneeb','hand','baloot','basra','solitaire_multiplayer','domino','backgammon'] as $key) $this->assertArrayHasKey($key,GameCatalog::all());
+        foreach(['chess','jackaroo'] as $key) $this->assertArrayNotHasKey($key,GameCatalog::all());
     }
 
     public function test_pasha_catalog_has_single_prices(): void

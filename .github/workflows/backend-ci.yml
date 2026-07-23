@@ -61,6 +61,8 @@ jobs:
         run: php tools/test-v184-official-rules-audit.php
       - name: Stress all registered game engines
         run: php tools/test-v184-engine-stress.php
+      - name: Audit the exact V186 18-game product engines
+        run: php tools/test-v186-engine-integrity.php
       - name: Run Laravel tests
         run: php artisan test
       - name: Production preflight in non-strict mode

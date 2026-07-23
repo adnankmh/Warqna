@@ -20,6 +20,7 @@ function auditAction(array $actions,string $type,?int $amount=null): array {
     }
     throw new RuntimeException("Missing action $type".($amount!==null?"/$amount":''));
 }
+class AuditTrixEngine extends TrixEngine { public function penalties(array $state): array { return $this->trixPenaltiesFromEvents($state); } }
 
 // Syrian Tarneeb 41: 13 cards, exposed-card trump, independent 2-13 declarations, total >= 11.
 $engine=new SyrianTarneebEngine();
@@ -65,8 +66,21 @@ foreach([2,4] as $count){
 
 // Trix family: 13 cards, 5 contracts/kingdom or two Complex contracts.
 $engine=new TrixEngine();$state=$engine->newGame(auditPlayers(4),['seed'=>184]);
-$contracts=array_column($engine->availableActions($state,'p0'),'contract');
+$owner=$state['players'][$state['currentIndex']]['id'];$contracts=array_column($engine->availableActions($state,$owner),'contract');
 auditCheck(count($state['hands']['p0'])===13 && count($contracts)===5,'Trix deals 13 and exposes five kingdom contracts');
+$girls=null;foreach($engine->availableActions($state,$owner) as $action)if(($action['contract']??'')==='girls'){$girls=$action;break;}
+$state=$engine->applyAction($state,$owner,$girls);
+auditCheck($state['phase']==='doubling','Trix opens the official doubling phase for Queens and King of Hearts');
+while($state['phase']==='doubling'){
+    $pid=$state['players'][$state['currentIndex']]['id'];$actions=$engine->availableActions($state,$pid);$double=null;
+    foreach($actions as $action)if(($action['type']??'')==='double_card'){$double=$action;break;}
+    $state=$engine->applyAction($state,$pid,$double??['type'=>'finish_doubling']);
+}
+auditCheck(count($state['doubledCards'])===4 && $state['phase']==='playing','Trix allows each Queen holder to reveal and double the card before trick play');
+$scoringEngine=new AuditTrixEngine();$scoreState=$state;$scoreState['contract']='girls';$scoreState['doubledCards']=['Q_C'=>'p0'];
+$scoreState['events']=[['type'=>'trick.won','data'=>['winner'=>'p1','cards'=>[['player'=>'p0','card'=>'Q_C'],['player'=>'p1','card'=>'A_C']]]]];
+$penalties=$scoringEngine->penalties($scoreState);
+auditCheck(($penalties['p1']??0)===-50 && ($penalties['p0']??0)===25,'Trix doubled Queen charges the taker twice and rewards the revealer once');
 $partner=new TrixPartnershipEngine();$partnerState=$partner->newGame(auditPlayers(4),['seed'=>184]);
 auditCheck(($partnerState['config']['partnership']??false)===true,'Partnership Trix combines opposite players');
 $complex=new TrixComplexEngine();$complexState=$complex->newGame(auditPlayers(4),['seed'=>184]);
@@ -74,10 +88,20 @@ $complexContracts=array_column($complex->availableActions($complexState,'p0'),'c
 sort($complexContracts);
 auditCheck($complexContracts===['complex','trix'] && (int)$complexState['config']['rounds']===8,'Trix Complex uses Complex and Trix across eight contracts');
 
-// Baloot: 32 cards, 8 each, Sun/Hokm contracts and partnership scoring.
+// Baloot: 32 cards, 5 each plus exposed buyer card, then 8 each after purchase.
 $engine=new BalootEngine();$state=$engine->newGame(auditPlayers(4),['seed'=>184]);
 $contracts=array_column($engine->availableActions($state,'p0'),'contract');
-auditCheck(count($state['hands']['p0'])===8 && array_sum(array_map('count',$state['hands']))===32,'Baloot uses a 32-card deck and deals eight each');
+auditCheck(count($state['hands']['p0'])===5 && array_sum(array_map('count',$state['hands']))===20 && !empty($state['buyerCard']),'Baloot starts buying after five cards each and exposes the buyer card');
 auditCheck(in_array('sun',$contracts,true) && in_array('hokm',$contracts,true),'Baloot offers Sun and Hokm contracts');
+$state=$engine->applyAction($state,'p0',auditAction($engine->availableActions($state,'p0'),'choose_contract'));
+auditCheck(count($state['hands']['p0'])===8 && array_sum(array_map('count',$state['hands']))===32,'Baloot completes the 8-card deal only after a legal purchase');
+$hokmState=$engine->newGame(auditPlayers(4),['seed'=>186]);$hokm=$engine->availableActions($hokmState,'p0');
+foreach($hokm as $action)if(($action['contract']??'')==='hokm'){$hokmState=$engine->applyAction($hokmState,'p0',$action);break;}
+auditCheck($hokmState['phase']==='bidding' && ($hokmState['pendingHokmBuyer']??null)==='p0','Baloot keeps a first-round Hokm request pending while San may override it');
+for($i=0;$i<3;$i++){$pid=$hokmState['players'][$hokmState['currentIndex']]['id'];$hokmState=$engine->applyAction($hokmState,$pid,['type'=>'pass']);}
+auditCheck($hokmState['players'][$hokmState['currentIndex']]['id']==='p0','Baloot returns to the Hokm requester after the other three players pass');
+$confirm=null;foreach($engine->availableActions($hokmState,'p0') as $action)if(($action['contract']??'')==='confirm_hokm'){$confirm=$action;break;}
+$hokmState=$engine->applyAction($hokmState,'p0',$confirm);
+auditCheck($hokmState['contract']==='hokm' && count($hokmState['hands']['p0'])===8,'Baloot confirms pending Hokm before completing the deal');
 
 echo "[PASS] Warqnaa curated card engines align with the audited official rule invariants.\n";

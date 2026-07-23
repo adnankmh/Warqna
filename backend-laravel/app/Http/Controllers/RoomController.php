@@ -336,6 +336,8 @@ class RoomController
  public function action(Room $room, Request $r, AntiCheatService $antiCheat, PlayActionNormalizer $normalizer){
   try{
    $data=$r->validate(['action'=>'required|string|max:40','payload'=>'nullable|array']);
+   return DB::transaction(function() use($room,$r,$antiCheat,$normalizer,$data){
+   $room=Room::query()->whereKey($room->id)->lockForUpdate()->firstOrFail();
    if(!$room->players()->where('user_id',auth()->id())->exists()) return response()->json(['ok'=>false,'valid'=>false,'message'=>'أنت لست داخل هذه الغرفة.'],403);
    $room->load('game','players'); $state=$room->state ?: [];
    $playerKey='user:'.auth()->id(); $engine=GameFactory::make($room->game->key);
@@ -367,6 +369,7 @@ class RoomController
    $state=$this->autoAdvanceNextRound($room,$state);
    $room->update(['status'=>($state['phase']??'playing')==='finished'?'finished':(($state['phase']??'playing')==='bidding'?'bidding':'playing'),'finished_at'=>($state['phase']??'')==='finished'?now():$room->finished_at,'state'=>$state]);
    return response()->json(['ok'=>true,'valid'=>true,'state'=>$this->publicState($state,$playerKey),'seats'=>$this->seatPayload($room)]);
+   },3);
   }catch(\Throwable $e){
    return response()->json(['ok'=>false,'valid'=>false,'message'=>'حدث خطأ بسيط أثناء تنفيذ الحركة، لم تتوقف اللعبة. جرّب تحديث الدور أو حركة أخرى.'],200);
   }
@@ -550,6 +553,8 @@ class RoomController
  }
 
  public function timeoutAutoPlay(Room $room){
+  return DB::transaction(function() use($room){
+  $room=Room::query()->whereKey($room->id)->lockForUpdate()->firstOrFail();
   $room->load('game','players'); $state=$room->state ?: []; $playerKey='user:'.auth()->id();
   if(($state['turn'] ?? null) !== $playerKey) return response()->json(['ok'=>true,'skipped'=>true,'state'=>$this->publicState($state,$playerKey)]);
   $rp=$room->players()->where('user_id',auth()->id())->first(); abort_unless($rp,403);
@@ -573,6 +578,7 @@ class RoomController
   }
   $state=$this->autoBots($room,$state); $state=$this->awardProfilePointsIfFinished($room,$state); $state=$this->autoAdvanceNextRound($room,$state); $room->update(['state'=>$state,'status'=>($state['phase']??'playing')==='finished'?'finished':(($state['phase']??'playing')==='bidding'?'bidding':'playing')]);
   return response()->json(['ok'=>true,'state'=>$this->publicState($state,$playerKey)]);
+  },3);
  }
 
  private function friendlyInvalidMessage(array $state,string $action,array $payload,string $playerKey): string{

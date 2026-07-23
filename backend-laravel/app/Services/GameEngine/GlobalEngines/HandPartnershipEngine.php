@@ -22,6 +22,7 @@ class HandPartnershipEngine extends GlobalCardEngineCore
             'opening' => 51,
             'teamOpening' => true,
             'openingEscalates' => true,
+            'layoffScope' => 'team',
             'targetScore' => 41,
             'targetOptions' => [],
             'minBid' => 7,

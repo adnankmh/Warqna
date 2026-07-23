@@ -33,7 +33,6 @@ class GlobalCardEngineRules implements GameRuleContract
         $enginePlayers=[];
         foreach($players as $i=>$p) $enginePlayers[]=['id'=>(string)$p,'name'=>$this->shortName((string)$p),'bot'=>str_starts_with((string)$p,'bot:')];
         $g=$this->engine->newGame($enginePlayers,[
-            'seed'=>random_int(100000,999999999),
             'targetScore'=>(int)($options['target'] ?? $this->defaultTarget($this->key)),
         ]);
         $g=$this->autoBots($g,30);
@@ -46,16 +45,11 @@ class GlobalCardEngineRules implements GameRuleContract
             $g=$this->globalState($state); if(!$g) return false;
             if(($state['turn'] ?? null)!==$playerId) return false;
             $a=$this->normalizeAction($action,$payload,$state,$playerId);
-            $available=$this->engine->availableActions($g,$playerId);
-            foreach($available as $x){
-                if(($x['type'] ?? '')!==($a['type'] ?? '')) continue;
-                if(isset($x['card']) && isset($a['card']) && $x['card']!==$a['card']) continue;
-                if(isset($x['amount']) && isset($a['amount']) && (int)$x['amount']!==(int)$a['amount']) continue;
-                if(isset($x['suit']) && isset($a['suit']) && $x['suit']!==$a['suit']) continue;
-                return true;
-            }
-            // Structured helpers are validated authoritatively by the engine.
-            return in_array(($a['type'] ?? ''), ['organize', 'layoff', 'meld_many', 'pass_trix'], true);
+            // Validate by executing against an in-memory copy. Comparing action
+            // names alone allowed altered structured payloads (target column,
+            // meld groups or layoff target) to be logged as valid before apply.
+            $this->engine->applyAction($g,$playerId,$a);
+            return true;
         }catch(\Throwable $e){ return false; }
     }
 
@@ -138,6 +132,10 @@ class GlobalCardEngineRules implements GameRuleContract
         if(!$players) $players=$fallbackPlayers;
         $hands=[];
         foreach(($g['hands'] ?? []) as $pid=>$cards) $hands[$pid]=$this->longCards((array)$cards);
+        $stockCounts=[];
+        if($this->key==='solitaire_multiplayer'){
+            foreach($hands as $pid=>$cards){$stockCounts[$pid]=count($cards);$hands[$pid]=[];}
+        }
         $turn=$players[(int)($g['currentIndex'] ?? 0)] ?? ($players[0] ?? null);
         $trick=[];
         foreach(($g['trick'] ?? []) as $play) if(isset($play['player'],$play['card'])) $trick[$play['player']]=$this->toLongCard($play['card']);
@@ -177,12 +175,15 @@ class GlobalCardEngineRules implements GameRuleContract
             'turn_timeout_seconds'=>max(5,min(10,(int)($g['config']['turnSeconds'] ?? 7))),
             'messages'=>$extra['messages'] ?? ['محرك عالمي final-v1 مفعّل.'],
             'deck_count'=>count($g['deck'] ?? []),
+            'stock_counts'=>$stockCounts,
             'discard'=>$this->longDiscard($g['discard'] ?? []),
             'melds'=>$this->longMelds($g['melds'] ?? []),
-            'tableau'=>$g['tableau'] ?? [],
+            'waste'=>$this->longPlayerCardLists($g['waste'] ?? []),
+            'tableau'=>$this->longTableau($g['tableau'] ?? []),
             'trix_board'=>$g['trixBoard'] ?? null,
             'trix_finish_order'=>$g['trixFinishOrder'] ?? [],
             'contracts_used'=>$g['contractsUsed'] ?? [],
+            'doubled_cards'=>$this->longDoubledCards($g['doubledCards'] ?? []),
             'foundation'=>$g['foundation'] ?? [],
             'legal_cards'=>[],
             'state_hash'=>$g['antiCheat']['lastHash'] ?? null,
@@ -202,7 +203,11 @@ class GlobalCardEngineRules implements GameRuleContract
             'bid' => ['type'=>'bid','amount'=>(int)($payload['value'] ?? $payload['amount'] ?? 0)],
             'pass' => ['type'=>'pass'],
             'choose_trump','choose_hokm','select_trump' => ['type'=>'choose_trump','suit'=>$this->toShortSuit((string)($payload['suit'] ?? ''))],
-            'choose_contract' => ['type'=>'choose_contract','contract'=>(string)($payload['contract'] ?? 'tricks')],
+            'choose_contract' => [
+                'type'=>'choose_contract',
+                'contract'=>(string)($payload['contract'] ?? 'tricks'),
+                'suit'=>$this->toShortSuit((string)($payload['suit'] ?? '')),
+            ],
             'play_card','card' => ['type'=>'play_card','card'=>$this->toShortCard($this->cardPayload($payload),$state['hands'][$playerId] ?? [])],
             'draw_deck','draw' => ['type'=>'draw_deck'],
             'draw_discard' => ['type'=>'draw_discard'],
@@ -213,6 +218,8 @@ class GlobalCardEngineRules implements GameRuleContract
                 (array)($payload['groups'] ?? [])
             )],
             'pass_trix' => ['type'=>'pass_trix'],
+            'double_card' => ['type'=>'double_card','card'=>$this->toShortCard($this->cardPayload($payload),$state['hands'][$playerId] ?? [])],
+            'finish_doubling' => ['type'=>'finish_doubling'],
             'layoff','attach' => [
                 'type'=>'layoff',
                 'target_player'=>(string)($payload['target_player'] ?? $payload['targetPlayer'] ?? $playerId),
@@ -221,7 +228,19 @@ class GlobalCardEngineRules implements GameRuleContract
             ],
             'organize' => ['type'=>'organize','strategy'=>'smart'],
             'draw_stock' => ['type'=>'draw_stock'],
-            'move_to_foundation' => ['type'=>'move_to_foundation','card'=>$this->toShortCard($this->cardPayload($payload),$state['hands'][$playerId] ?? [])],
+            'recycle_stock' => ['type'=>'recycle_stock'],
+            'move_to_foundation' => [
+                'type'=>'move_to_foundation','card'=>$this->toShortCard($this->cardPayload($payload),[]),
+                'source'=>(string)($payload['source'] ?? 'auto'),
+                'column'=>isset($payload['column'])?(int)$payload['column']:null,
+            ],
+            'move_to_tableau' => [
+                'type'=>'move_to_tableau','source'=>(string)($payload['source'] ?? 'tableau'),
+                'card'=>$this->toShortCard($this->cardPayload($payload),[]),
+                'from_column'=>(int)($payload['from_column'] ?? -1),
+                'from_index'=>(int)($payload['from_index'] ?? -1),
+                'to_column'=>(int)($payload['to_column'] ?? -1),
+            ],
             default => ['type'=>$action],
         };
         return $a;
@@ -248,7 +267,7 @@ class GlobalCardEngineRules implements GameRuleContract
             default => 4,
         };
     }
-    private function defaultTarget(string $key): int { return match($key){'baloot'=>152,'tarneeb_400'=>41,'banakil','pinochle'=>222,default=>101}; }
+    private function defaultTarget(string $key): int { return match($key){'baloot'=>152,'tarneeb_400','syrian_tarneeb'=>41,'banakil'=>222,'pinochle'=>150,default=>101}; }
     private function gameType(): string { return match($this->key){'trix','trix_partner','trix_complex'=>'trix','hand','hand_partner','saudi_hand','banakil','pinochle','solitaire_multiplayer'=>'hand','baloot'=>'baloot','syrian_tarneeb','tarneeb_400'=>'tarneeb',default=>$this->key}; }
     private function mapPhase(string $p): string { return match($p){'contract'=>'choose_contract','trix_playing'=>'playing','draw','discard'=>'playing',default=>$p}; }
     private function cardPayload(array $p): string { $v=$p['card'] ?? $p['card_id'] ?? $p['id'] ?? $p['code'] ?? ''; return is_array($v) ? (string)($v['id'] ?? $v['card'] ?? '') : (string)$v; }
@@ -310,6 +329,21 @@ class GlobalCardEngineRules implements GameRuleContract
         }, $discard));
     }
     private function longMelds(array $melds): array { foreach($melds as $pid=>$list) foreach($list as $i=>$m) if(isset($m['cards'])) $melds[$pid][$i]['cards']=$this->longCards((array)$m['cards']); return $melds; }
+    private function longPlayerCardLists(array $lists): array { foreach($lists as $pid=>$cards)$lists[$pid]=$this->longCards((array)$cards);return $lists; }
+    private function longDoubledCards(array $cards): array { $out=[];foreach($cards as $card=>$player)$out[$this->toLongCard((string)$card)]=$player;return $out; }
+    private function longTableau(array $tableau): array
+    {
+        foreach($tableau as $pid=>$columns){
+            foreach((array)$columns as $i=>$column){
+                if(is_array($column)&&array_key_exists('up',$column)){
+                    $tableau[$pid][$i]['up']=$this->longCards((array)($column['up'] ?? []));
+                    $tableau[$pid][$i]['down_count']=count((array)($column['down'] ?? []));
+                    unset($tableau[$pid][$i]['down']);
+                }elseif(is_string($column)) $tableau[$pid][$i]=$this->toLongCard($column);
+            }
+        }
+        return $tableau;
+    }
     private function messagesFromEvents(array $g): array
     {
         $names=[];foreach($g['players'] ?? [] as $player)$names[(string)($player['id'] ?? '')]=(string)($player['name'] ?? $player['id'] ?? 'لاعب');
@@ -330,6 +364,8 @@ class GlobalCardEngineRules implements GameRuleContract
                 'rummy.meld_many'=>$name.' أنزل عدة مجموعات قانونية.',
                 'trix.card_played'=>$name.' ركّب ورقة في عقد تركس.',
                 'trix.pass'=>$name.' مرّر لعدم وجود ورقة قابلة للتركيب.',
+                'trix.card_doubled'=>$name.' دبّل ورقة خاصة في تركس.',
+                'trix.doubling_finished'=>'انتهت مرحلة تدبيل تركس.',
                 'rummy.layoff'=>$name.' ركّب أوراقًا على مجموعة موجودة.',
                 default=>'• '.str_replace(['.','_'],' ',$type),
             };

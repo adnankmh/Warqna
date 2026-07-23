@@ -220,9 +220,9 @@ class MobileGameController extends Controller
 
         $allowedCounts = match ($data['game']) {
             'pinochle', 'banakil' => [2,4],
-            'hand', 'saudi_hand' => [2,3,4],
-            'hand_partner' => [4],
-            default => [(int)$game->max_players],
+            'hand', 'saudi_hand' => [2,3,4,5],
+            'solitaire_multiplayer', 'domino' => range((int)$meta['min'], (int)$meta['max']),
+            default => [(int)$meta['max']],
         };
         $maxPlayers = (int) ($data['player_count'] ?? $allowedCounts[0]);
         abort_unless(in_array($maxPlayers, $allowedCounts, true), 422, 'عدد اللاعبين غير مدعوم لهذه اللعبة.');
@@ -241,7 +241,8 @@ class MobileGameController extends Controller
         $state = $engine->initialState($playerKeys, [
             'target' => $target,
             'turn_seconds' => (int) ($data['turn_seconds'] ?? 10),
-            'partners' => (bool) $game->partnership,
+            'partners' => (bool) $meta['partnership'],
+            'player_count' => $maxPlayers,
         ]);
         $state['game'] = $data['game'];
         $state['play_direction'] = 'counterclockwise';
@@ -333,17 +334,8 @@ class MobileGameController extends Controller
             'state_revision' => 'nullable|integer|min:0',
         ]);
         $user = $request->user();
-        $state = $room->state ?: [];
-        $currentRevision = (int)($state['_revision'] ?? 0);
-        if (array_key_exists('state_revision', $data) && (int)$data['state_revision'] !== $currentRevision) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'تم تحديث حالة اللعبة على الخادم. أعد المحاولة بالحالة الأحدث.',
-                'code' => 'stale_game_state',
-                'room' => $this->roomPayload($room->fresh(['game', 'players.user.profile']), $user->id),
-            ], 409);
-        }
         $clientActionId = trim((string)($data['client_action_id'] ?? ''));
+        $cacheKey = null;
         if ($clientActionId !== '') {
             $cacheKey = 'warqna:game-action:'.$room->id.':'.$user->id.':'.hash('sha256', $clientActionId);
             if (!Cache::add($cacheKey, true, now()->addMinutes(15))) {
@@ -355,44 +347,53 @@ class MobileGameController extends Controller
                 ]);
             }
         }
-        $playerKey = 'user:' . $user->id;
-        $engine = GameFactory::make($room->game->key);
-        $payload = $data['payload'] ?? [];
-        $valid = $engine->validate($state, $playerKey, $data['action'], $payload);
+        $result = DB::transaction(function () use ($request,$room,$user,$data,$progression,$cacheKey) {
+            // The revision check and state write must share the same row lock.
+            // Otherwise two simultaneous requests can both validate against the
+            // same revision and the later write silently replaces the first.
+            $locked = Room::query()->with('game')->whereKey($room->id)->lockForUpdate()->firstOrFail();
+            $state = $locked->state ?: [];
+            $currentRevision = (int)($state['_revision'] ?? 0);
+            if (array_key_exists('state_revision', $data) && (int)$data['state_revision'] !== $currentRevision) {
+                if ($cacheKey) Cache::forget($cacheKey);
+                return ['status'=>409,'ok'=>false,'code'=>'stale_game_state','message'=>'تم تحديث حالة اللعبة على الخادم. أعد المحاولة بالحالة الأحدث.'];
+            }
 
-        DB::table('game_actions')->insert([
-            'room_id' => $room->id,
-            'user_id' => $user->id,
-            'action' => $data['action'],
-            'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            'valid' => $valid,
-            'ip' => $request->ip(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            $playerKey = 'user:' . $user->id;
+            $engine = GameFactory::make((string)$locked->game->key);
+            $payload = $data['payload'] ?? [];
+            $valid = $engine->validate($state, $playerKey, $data['action'], $payload);
+            DB::table('game_actions')->insert([
+                'room_id'=>$locked->id,'user_id'=>$user->id,'action'=>$data['action'],
+                'payload'=>json_encode($payload, JSON_UNESCAPED_UNICODE),'valid'=>$valid,
+                'ip'=>$request->ip(),'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            if (!$valid) return ['status'=>422,'ok'=>false,'message'=>$state['last_error_message'] ?? 'الحركة غير قانونية في الحالة الحالية.'];
 
-        if (!$valid) {
-            return response()->json([
-                'ok' => false,
-                'message' => $state['last_error_message'] ?? 'الحركة غير قانونية في الحالة الحالية.',
-                'room' => $this->roomPayload($room->fresh(['game', 'players.user.profile']), $user->id),
-            ], 422);
+            $next = $engine->apply($state, $playerKey, $data['action'], $payload);
+            if (!empty($next['last_error']) || !empty($next['last_error_message'])) {
+                return ['status'=>422,'ok'=>false,'message'=>$next['last_error_message'] ?? 'رفض المحرك الحركة.'];
+            }
+            $next = $this->advanceAutomatedTurns($engine, $next, (string)$locked->game->key);
+            $next['_revision'] = $currentRevision + 1;
+            $progressionPopup = $this->awardProgressionTransition($progression, $locked, $state, $next);
+            if ($progressionPopup !== []) $next['progression_popup'] = $progressionPopup;
+            $locked->update([
+                'state'=>$next,'status'=>$this->roomStatus((string)($next['phase'] ?? 'playing')),
+                'finished_at'=>($next['phase'] ?? null)==='finished' ? now() : null,
+            ]);
+            return ['status'=>200,'ok'=>true,'message'=>'تم اعتماد الحركة'];
+        }, 3);
+
+        if (($result['status'] ?? 500) !== 200) {
+            return response()->json($result + [
+                'room'=>$this->roomPayload($room->fresh(['game','players.user.profile']),$user->id),
+            ], (int)$result['status']);
         }
-
-        $next = $engine->apply($state, $playerKey, $data['action'], $payload);
-        $next = $this->advanceAutomatedTurns($engine, $next, (string) $room->game->key);
-        $next['_revision'] = $currentRevision + 1;
-        $progressionPopup = $this->awardProgressionTransition($progression, $room, $state, $next);
-        if ($progressionPopup !== []) $next['progression_popup'] = $progressionPopup;
-        $room->update([
-            'state' => $next,
-            'status' => $this->roomStatus((string) ($next['phase'] ?? 'playing')),
-            'finished_at' => ($next['phase'] ?? null) === 'finished' ? now() : null,
-        ]);
 
         return response()->json([
             'ok' => true,
-            'message' => 'تم اعتماد الحركة',
+            'message' => $result['message'],
             'room' => $this->roomPayload($room->fresh(['game', 'players.user.profile']), $user->id),
         ]);
     }
@@ -400,36 +401,39 @@ class MobileGameController extends Controller
     public function timeout(Request $request, Room $room, ProgressionService $progression)
     {
         $this->authorizeRoom($request, $room);
-        $before = $room->state ?: [];
         $user = $request->user();
-        $playerKey = 'user:'.$user->id;
-        $player = $room->players()->where('user_id',$user->id)->first();
-        $wasUsersTurn = ($before['turn'] ?? null) === $playerKey;
         $awayMode = $request->boolean('away_mode');
-        if ($awayMode) { $before['away_players'][$playerKey] = true; } else { unset($before['away_players'][$playerKey]); }
-        if ($wasUsersTurn && $player && !$awayMode) $player->increment('missed_turns');
+        DB::transaction(function () use ($room,$user,$awayMode,$progression) {
+            // Timeouts mutate the same state as normal actions, therefore they
+            // must share the row lock and revision sequence with action().
+            $locked = Room::query()->with('game')->whereKey($room->id)->lockForUpdate()->firstOrFail();
+            $before = $locked->state ?: [];
+            $playerKey = 'user:'.$user->id;
+            $player = $locked->players()->where('user_id',$user->id)->lockForUpdate()->first();
+            $wasUsersTurn = ($before['turn'] ?? null) === $playerKey;
+            if ($awayMode) { $before['away_players'][$playerKey] = true; } else { unset($before['away_players'][$playerKey]); }
+            if ($wasUsersTurn && $player && !$awayMode) $player->increment('missed_turns');
 
-        $state = $before;
-        $engine = GameFactory::make($room->game->key);
-        $state = method_exists($engine, 'onTurnTimeout')
-            ? $engine->onTurnTimeout($state)
-            : $this->automaticMove($engine, $state, (string)$room->game->key);
-        $state = $this->advanceAutomatedTurns($engine, $state, (string)$room->game->key);
-        $state['_revision'] = (int)($before['_revision'] ?? 0) + 1;
+            $state = $before;
+            $engine = GameFactory::make((string)$locked->game->key);
+            $state = method_exists($engine, 'onTurnTimeout')
+                ? $engine->onTurnTimeout($state)
+                : $this->automaticMove($engine, $state, (string)$locked->game->key);
+            $state = $this->advanceAutomatedTurns($engine, $state, (string)$locked->game->key);
+            $state['_revision'] = (int)($before['_revision'] ?? 0) + 1;
 
-        if ($wasUsersTurn && $player && !$awayMode && (int)$player->fresh()->missed_turns >= 3) {
-            $oldKey = $playerKey;
-            $newKey = 'bot:'.$player->id;
-            $state = $this->replacePlayerKey($state,$oldKey,$newKey);
-            $returns = (int)data_get($state,'disconnected_replacements.'.$user->id.'.returns',0);
-            $state['disconnected_replacements'][$user->id] = ['room_player_id'=>$player->id,'seat'=>$player->seat,'returns'=>$returns];
-            $state['messages'][] = '🚪 '.$user->username.' غاب ثلاث لفات؛ البوت يكمل ويمكنه العودة ما لم يخرج ثلاث مرات.';
-            $player->update(['user_id'=>null,'is_bot'=>true,'bot_key'=>$this->botName((int)$player->seat),'connected'=>true,'missed_turns'=>0]);
-        }
+            if ($wasUsersTurn && $player && !$awayMode && (int)$player->fresh()->missed_turns >= 3) {
+                $state = $this->replacePlayerKey($state,$playerKey,'bot:'.$player->id);
+                $returns = (int)data_get($state,'disconnected_replacements.'.$user->id.'.returns',0);
+                $state['disconnected_replacements'][$user->id] = ['room_player_id'=>$player->id,'seat'=>$player->seat,'returns'=>$returns];
+                $state['messages'][] = '🚪 '.$user->username.' غاب ثلاث لفات؛ البوت يكمل ويمكنه العودة ما لم يخرج ثلاث مرات.';
+                $player->update(['user_id'=>null,'is_bot'=>true,'bot_key'=>$this->botName((int)$player->seat),'connected'=>true,'missed_turns'=>0]);
+            }
 
-        $progressionPopup = $this->awardProgressionTransition($progression, $room, $before, $state);
-        if ($progressionPopup !== []) $state['progression_popup'] = $progressionPopup;
-        $room->update(['state'=>$state,'status'=>$this->roomStatus((string)($state['phase'] ?? 'playing'))]);
+            $progressionPopup = $this->awardProgressionTransition($progression, $locked, $before, $state);
+            if ($progressionPopup !== []) $state['progression_popup'] = $progressionPopup;
+            $locked->update(['state'=>$state,'status'=>$this->roomStatus((string)($state['phase'] ?? 'playing'))]);
+        }, 3);
         return response()->json(['ok'=>true,'room'=>$this->roomPayload($room->fresh(['game','players.user.profile']),$user->id)]);
     }
 
@@ -791,10 +795,13 @@ class MobileGameController extends Controller
     private function defaultTarget(string $key): int
     {
         return match ($key) {
-            'tarneeb', 'tarneeb_41' => 41,
-            'tarneeb_61', 'syrian_tarneeb' => 61,
-            'tarneeb_400' => 400,
+            'tarneeb', 'tarneeb_41', 'syrian_tarneeb', 'tarneeb_400' => 41,
+            'tarneeb_61' => 61,
             'baloot' => 152,
+            'basra' => 121,
+            'domino' => 100,
+            'banakil' => 222,
+            'pinochle' => 150,
             default => 101,
         };
     }

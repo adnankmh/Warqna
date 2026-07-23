@@ -21,7 +21,9 @@ class GameFactory
             'jackaroo' => new JackarooRules(),
             'chess' => new ChessRules(),
 
-            default => new UniversalSocialGameRules($key),
+            // Never silently downgrade an unknown product key to a permissive
+            // generic engine. A typo or forged game id must fail closed.
+            default => throw new \InvalidArgumentException('Unsupported game engine: '.$key),
         };
     }
 }

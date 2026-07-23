@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Tests\TestCase;
 use App\Services\GameEngine\GameFactory;
+use App\Services\GameEngine\EngineRegistry;
 use App\Services\WarqnaPro\StoreCatalogService;
 
 class V134CriticalFixesTest extends TestCase
@@ -19,8 +20,10 @@ class V134CriticalFixesTest extends TestCase
 
     public function test_all_curated_game_engines_start(): void
     {
-        foreach(['tarneeb','tarneeb_41','tarneeb_61','syrian_tarneeb','tarneeb_400','hand','hand_partner','saudi_hand','pinochle','banakil','solitaire_multiplayer','trix','trix_partner','trix_complex','baloot'] as $key){
-            $state=GameFactory::make($key)->initialState(['user:1','user:2','user:3','user:4'],['target'=>41]);
+        foreach(EngineRegistry::PRODUCT_KEYS as $key){
+            $meta=EngineRegistry::get($key);$players=[];
+            for($i=0;$i<(int)$meta['max'];$i++) $players[]=$i===0?'user:1':'bot:'.$i;
+            $state=GameFactory::make($key)->initialState($players,['target'=>41,'player_count'=>(int)$meta['max']]);
             $this->assertNotEmpty($state['turn'],$key);
             $this->assertNotEmpty($state['phase'],$key);
         }

@@ -51,7 +51,7 @@ class TarneebRules implements GameRuleContract
             if($action==='next_round') { $this->engine->nextRound($s); return true; }
             if(($state['turn'] ?? null)!==$playerId) return false;
             if($action==='pass') { $this->engine->bid($s,$playerId,null); return true; }
-            if($action==='bid') { $this->engine->bid($s,$playerId,(int)($payload['value'] ?? 0)); return true; }
+            if($action==='bid') { $this->engine->bid($s,$playerId,(int)($payload['value'] ?? $payload['amount'] ?? 0)); return true; }
             if($action==='choose_trump') { $this->engine->chooseTrump($s,$playerId,$this->toShortSuit((string)($payload['suit'] ?? ''))); return true; }
             if($action==='play_card') {
                 $hand=$state['hands'][$playerId] ?? [];
@@ -73,7 +73,7 @@ class TarneebRules implements GameRuleContract
             $action=$this->normalizeAction($action);
             if($action==='next_round') $s=$this->engine->nextRound($s);
             elseif($action==='pass') $s=$this->engine->bid($s,$playerId,null);
-            elseif($action==='bid') $s=$this->engine->bid($s,$playerId,(int)($payload['value'] ?? 0));
+            elseif($action==='bid') $s=$this->engine->bid($s,$playerId,(int)($payload['value'] ?? $payload['amount'] ?? 0));
             elseif($action==='choose_trump') $s=$this->engine->chooseTrump($s,$playerId,$this->toShortSuit((string)($payload['suit'] ?? '')));
             elseif($action==='play_card'){
                 $hand=$state['hands'][$playerId] ?? [];
@@ -112,6 +112,29 @@ class TarneebRules implements GameRuleContract
             $next['messages']=array_values(array_slice(array_merge($state['messages'] ?? [],['⏱️ انتهى وقت الدور، تم تنفيذ حركة تلقائية في الطرنيب.'],$this->messagesFromEvents($s)),-40));
             return $next;
         }catch(\Throwable $e){ return $state; }
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    public function availableActions(array $state,string $playerId): array
+    {
+        try {
+            $s=$this->toStandalone($state);
+            if(!$s || ($state['turn'] ?? null)!==$playerId) return [];
+            $phase=(string)($s['phase'] ?? '');
+            if($phase==='bidding'){
+                $actions=[['type'=>'pass']];
+                $minimum=max((int)($s['rules']['minBid'] ?? 7),(int)($s['bid']['amount'] ?? 0)+1);
+                for($amount=$minimum;$amount<=(int)($s['rules']['maxBid'] ?? 13);$amount++)$actions[]=['type'=>'bid','amount'=>$amount];
+                return $actions;
+            }
+            if($phase==='choose_trump') return array_map(fn($suit)=>['type'=>'choose_trump','suit'=>$this->toLongSuit($suit)],['C','D','S','H']);
+            if($phase==='playing'){
+                $seat=(int)($s['currentSeat'] ?? 0);
+                return array_map(fn($card)=>['type'=>'play_card','card'=>$this->toLongCard((string)$card)],$this->engine->legalCards($s,$seat));
+            }
+            if($phase==='round_end') return [['type'=>'next_round']];
+            return [];
+        } catch(\Throwable) { return []; }
     }
 
     private function fromStandalone(array $s,array $fallbackPlayers=[],array $extra=[]): array
@@ -186,6 +209,8 @@ class TarneebRules implements GameRuleContract
             'messages'=>$extra['messages'] ?? ['طرنيب v132 يعمل بمحرك مستقل مدمج.'],
             'legal_cards'=>[],
             'state_hash'=>$s['security']['stateHash'] ?? null,
+            'deal_commitment'=>$s['security']['dealCommitment'] ?? null,
+            'deal_reveal'=>in_array((string)($s['phase'] ?? ''),['round_end','game_over'],true) ? ($s['seed'] ?? null) : null,
         ];
         if($phase==='finished'){
             $out['winner_team']=((int)($s['winnerTeam'] ?? 0)===0?'teamA':'teamB');

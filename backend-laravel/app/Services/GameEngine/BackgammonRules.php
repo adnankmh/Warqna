@@ -121,6 +121,26 @@ class BackgammonRules implements GameRuleContract
     /** @return array<int,array{from:int,to:int,die:int,hit:bool,bear_off:bool}> */
     private function legalMoves(array $state,string $player): array
     {
+        $moves=$this->rawLegalMoves($state,$player);
+        if(count($moves)<=1)return $moves;
+        $ranked=[];$best=0;
+        foreach($moves as $index=>$move){
+            $next=$state;$this->executeMove($next,$player,$move);
+            $dieIndex=array_search($move['die'],$next['moves_left'],true);
+            if($dieIndex!==false)array_splice($next['moves_left'],$dieIndex,1);
+            $ranked[$index]=1+$this->maxPlayableDice($next,$player,3);
+            $best=max($best,$ranked[$index]);
+        }
+        $moves=array_values(array_filter($moves,fn($move,$index)=>($ranked[$index]??0)===$best,ARRAY_FILTER_USE_BOTH));
+        // If only one of two different dice can be played, the larger die is mandatory.
+        $dice=array_values(array_unique(array_map('intval',$state['moves_left']??[])));
+        if($best===1&&count($dice)>1){$largest=max(array_map(fn($m)=>(int)$m['die'],$moves));$moves=array_values(array_filter($moves,fn($m)=>(int)$m['die']===$largest));}
+        return $moves;
+    }
+
+    /** @return array<int,array{from:int,to:int,die:int,hit:bool,bear_off:bool}> */
+    private function rawLegalMoves(array $state,string $player): array
+    {
         $moves=[];$dice=array_values(array_unique(array_map('intval',$state['moves_left']??[])));
         if(!$dice)return [];
         $direction=$this->direction($state,$player);
@@ -144,6 +164,14 @@ class BackgammonRules implements GameRuleContract
             }
         }
         return $moves;
+    }
+
+    private function maxPlayableDice(array $state,string $player,int $depth): int
+    {
+        if($depth<=0||empty($state['moves_left']))return 0;
+        $moves=$this->rawLegalMoves($state,$player);if(!$moves)return 0;$best=0;
+        foreach($moves as $move){$next=$state;$this->executeMove($next,$player,$move);$i=array_search($move['die'],$next['moves_left'],true);if($i!==false)array_splice($next['moves_left'],$i,1);$best=max($best,1+$this->maxPlayableDice($next,$player,$depth-1));}
+        return $best;
     }
 
     private function executeMove(array &$state,string $player,array $move): void

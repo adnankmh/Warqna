@@ -14,11 +14,7 @@ foreach ([
 
 use App\Services\GameEngine\{EngineRegistry, GameFactory};
 
-$keys = [
-    'tarneeb','syrian_tarneeb','tarneeb_400','trix','trix_partner','trix_complex',
-    'hand','hand_partner','saudi_hand','banakil','pinochle','baloot',
-    'solitaire_multiplayer','domino','basra','backgammon','jackaroo','chess',
-];
+$keys = EngineRegistry::PRODUCT_KEYS;
 $iterations = 20;
 $checks = 0;
 $errors = [];
@@ -46,15 +42,7 @@ foreach ($keys as $key) {
             $turn = (string)$state['turn'];
             if (method_exists($rules, 'availableActions')) {
                 $actions = $rules->availableActions($state, $turn);
-                if (!$actions && $key === 'jackaroo' && !empty($state['hands'][$turn])) {
-                    if (!$rules->validate($state, $turn, 'pass', [])) {
-                        throw new RuntimeException('Jackaroo has no move but does not permit the required pass');
-                    }
-                    $next = $rules->apply($state, $turn, 'pass', []);
-                    if (!empty($next['last_error_message'])) {
-                        throw new RuntimeException('Jackaroo legal pass failed: '.$next['last_error_message']);
-                    }
-                } elseif (!$actions && ($state['phase'] ?? '') !== 'finished') {
+                if (!$actions && ($state['phase'] ?? '') !== 'finished') {
                     throw new RuntimeException('no legal actions for current player in phase '.($state['phase'] ?? 'unknown'));
                 } elseif ($actions) {
                     $action = $actions[0];
@@ -65,13 +53,9 @@ foreach ($keys as $key) {
                     if (!$rules->validate($state, $turn, $type, $payload)) {
                         throw new RuntimeException('advertised action failed validation: '.$type);
                     }
-                    // Chess move timestamps depend on Laravel's now() helper; its
-                    // complete move logic is covered by test-v142-rule-cores.php.
-                    if ($key !== 'chess') {
-                        $next = $rules->apply($state, $turn, $type, $payload);
-                        if (!empty($next['last_error']) || !empty($next['last_error_message'])) {
-                            throw new RuntimeException('legal action failed: '.($next['last_error_message'] ?? $next['last_error']));
-                        }
+                    $next = $rules->apply($state, $turn, $type, $payload);
+                    if (!empty($next['last_error']) || !empty($next['last_error_message'])) {
+                        throw new RuntimeException('legal action failed: '.($next['last_error_message'] ?? $next['last_error']));
                     }
                 }
             }

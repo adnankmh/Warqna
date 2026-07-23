@@ -20,6 +20,7 @@ class SaudiHandEngine extends GlobalCardEngineCore
             'starterExtraCard' => true,
             'starterMustDiscard' => true,
             'opening' => 51,
+            'layoffScope' => 'all',
             'targetScore' => 41,
             'targetOptions' => [],
             'minBid' => 7,

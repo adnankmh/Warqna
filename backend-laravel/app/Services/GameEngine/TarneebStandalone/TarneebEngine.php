@@ -139,6 +139,7 @@ final class TarneebEngine
             'security' => [
                 'lastActionNo' => 0,
                 'stateHash' => null,
+                'dealCommitment' => hash('sha256', 'tarneeb|'.$seed.'|'.implode('|', array_map(fn($p)=>(string)($p['id'] ?? ''), $players))),
             ],
             'createdAt' => time(),
             'updatedAt' => time(),

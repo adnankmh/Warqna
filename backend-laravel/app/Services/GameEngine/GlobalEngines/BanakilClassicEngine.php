@@ -27,6 +27,7 @@ class BanakilClassicEngine extends GlobalCardEngineCore
             'maxJokersPerMeld' => 1,
             'maxTwosPerMeld' => 1,
             'setRanks' => ['3', 'A'],
+            'layoffScope' => 'team',
             'trump' => false,
             'security' => [
                 'serverAuthoritative' => true,
