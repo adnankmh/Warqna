@@ -1,3 +1,0 @@
- <?php $__env->startSection('content'); ?><div class="auth-card"><h2>تسجيل الدخول</h2><form method="post"><?php echo csrf_field(); ?><input name="login" placeholder="Username أو Email" required><div class="auth-hint">يمكنك الدخول باليوزرنيم أو الإيميل. Username الإدارة: <b>Adnan</b></div><input type="password" name="password" placeholder="Password" required><button class="btn primary">دخول</button></form><a href="<?php echo e(route('register')); ?>">إنشاء حساب جديد</a></div><?php $__env->stopSection(); ?>
-
-<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH C:\xampp\htdocs\warqna-v142-real-engines-social-admin-premium\backend-laravel\resources\views/auth/login.blade.php ENDPATH**/ ?>
