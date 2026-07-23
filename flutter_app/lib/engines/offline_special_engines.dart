@@ -432,13 +432,6 @@ class _OfflineBackgammon implements OfflineSpecialEngine {
 
   int _direction(int seat) => seat == 0 ? 1 : -1;
 
-  bool _destinationOpen(int seat, int point) {
-    final destination = points[point]!;
-    return destination.owner == null ||
-        destination.owner == seat ||
-        destination.count <= 1;
-  }
-
   bool _allInHome(int seat) {
     if (bar[seat] > 0) return false;
     for (final entry in points.entries) {
@@ -1780,8 +1773,6 @@ class _OfflineLeekha implements OfflineSpecialEngine {
   String _rank(String card) => card.split('_').first;
   String _suit(String card) => card.split('_').last;
   int _rankValue(String card) => ranks.indexOf(_rank(card));
-  int _team(int seat) => seat.isEven ? 0 : 1;
-
   int _passTarget(int seat) =>
       passDirection == 'right' ? (seat + 1) % 4 : (seat + 3) % 4;
 

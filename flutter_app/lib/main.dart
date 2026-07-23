@@ -6920,9 +6920,8 @@ class _ServerEngineRoomPageState extends State<ServerEngineRoomPage> with Widget
               buildDefaultDragHandles: false,
               padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
               itemCount: tokens.length,
-              onReorder: (oldIndex, newIndex) {
+              onReorderItem: (oldIndex, newIndex) {
                 setState(() {
-                  if (newIndex > oldIndex) newIndex--;
                   final token = manualHandOrder.removeAt(oldIndex);
                   manualHandOrder.insert(newIndex, token);
                 });

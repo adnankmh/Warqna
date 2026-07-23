@@ -93,6 +93,18 @@ for needle in ('final int botCount;', 'final List<int> inviteeIds;', 'this.botCo
         fail(f'missing room participant option: {needle}')
 
 main_text = (ROOT / 'flutter_app/lib/main.dart').read_text(encoding='utf-8')
+special_engine_text = (ROOT / 'flutter_app/lib/engines/offline_special_engines.dart').read_text(encoding='utf-8')
+if 'bool _destinationOpen(int seat, int point)' in special_engine_text:
+    fail('unused Backgammon _destinationOpen analyzer warning returned')
+if special_engine_text.count('int _team(int seat) => seat.isEven ? 0 : 1;') != 1:
+    fail('offline special engines must keep only the used team helper')
+if 'onReorder:' in main_text:
+    fail('deprecated ReorderableListView.onReorder callback returned')
+if 'onReorderItem:' not in main_text:
+    fail('ReorderableListView must use onReorderItem')
+if 'if (newIndex > oldIndex) newIndex--;' in main_text:
+    fail('onReorderItem must not manually decrement the adjusted newIndex')
+
 for needle in (
     'اختيار المشاركين قبل إنشاء الغرفة',
     'selectedInviteeIds',
