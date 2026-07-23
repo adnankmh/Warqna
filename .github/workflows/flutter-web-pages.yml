@@ -23,6 +23,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+      - name: Sanitize checked-out source
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python3 tools/sanitize_ci_workspace_v187.py --ci
 
       - name: Load release metadata
         id: release

@@ -31,6 +31,17 @@ jobs:
     steps:
       - name: Checkout project
         uses: actions/checkout@v6
+      - name: Sanitize checked-out source when used from monorepo root
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ -f tools/sanitize_ci_workspace_v187.py ]; then
+            python3 tools/sanitize_ci_workspace_v187.py --ci
+          elif [ -f ../tools/sanitize_ci_workspace_v187.py ]; then
+            python3 ../tools/sanitize_ci_workspace_v187.py --ci
+          else
+            rm -f .env backend-laravel/.env
+          fi
 
       - name: Validate public HTTPS app URL
         run: |

@@ -2,10 +2,17 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+FORBIDDEN = [
+    "backend-laravel/.env",
+    "flutter_app/android/key.properties",
+    "flutter_app/android/app/upload-keystore.jks",
+]
 
 
 def fail(message: str) -> None:
@@ -24,13 +31,29 @@ def require_text(rel: str, needles: list[str]) -> str:
     return text
 
 
+def sanitize_ci_workspace() -> None:
+    ci = os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+    if not ci:
+        return
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/sanitize_ci_workspace_v187.py"), "--ci"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.returncode != 0:
+        fail("CI workspace sanitization failed")
+
+
 def main() -> None:
-    forbidden = [
-        "backend-laravel/.env",
-        "flutter_app/android/key.properties",
-        "flutter_app/android/app/upload-keystore.jks",
-    ]
-    for rel in forbidden:
+    # GitHub Actions sets CI=true. Sanitize first so a legacy tracked .env from an
+    # older commit cannot break every workflow before its deletion commit lands.
+    sanitize_ci_workspace()
+
+    for rel in FORBIDDEN:
         if (ROOT / rel).exists():
             fail(f"Runtime secret/signing file exists in source package: {rel}")
 
@@ -47,8 +70,14 @@ def main() -> None:
         "key.properties",
     ])
     require_text("backend-laravel/.gitignore", ["/.env", "/vendor/"])
+    require_text("tools/sanitize_ci_workspace_v187.py", [
+        "backend-laravel/.env",
+        "CI workspace secret/signing sanitization completed",
+    ])
     require_text(".github/workflows/backend-ci.yml", [
         "actions/checkout@v6",
+        "Sanitize checked-out source",
+        "sanitize_ci_workspace_v187.py --ci",
         "composer validate --no-check-lock --strict",
         "Repair stale Composer lock safely",
         "composer validate --no-check-publish",
@@ -60,16 +89,22 @@ def main() -> None:
     ])
     require_text(".github/workflows/flutter-android.yml", [
         "actions/checkout@v6",
+        "Sanitize checked-out source",
+        "sanitize_ci_workspace_v187.py --ci",
         "actions/upload-artifact@v7",
         "python3 tools/validate_release.py",
     ])
     require_text(".github/workflows/flutter-ios.yml", [
         "actions/checkout@v6",
+        "Sanitize checked-out source",
+        "sanitize_ci_workspace_v187.py --ci",
         "actions/upload-artifact@v7",
         "python3 tools/validate_release.py",
     ])
     require_text(".github/workflows/flutter-web-pages.yml", [
         "actions/checkout@v6",
+        "Sanitize checked-out source",
+        "sanitize_ci_workspace_v187.py --ci",
         "actions/configure-pages@v5",
         "actions/upload-pages-artifact@v4",
         "actions/deploy-pages@v4",
@@ -77,11 +112,15 @@ def main() -> None:
     ])
     require_text(".github/workflows/production-release-check.yml", [
         "actions/checkout@v6",
+        "Sanitize checked-out source",
+        "sanitize_ci_workspace_v187.py --ci",
         "python3 tools/validate_release.py",
     ])
 
     for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
         text = path.read_text(encoding="utf-8")
+        if "actions/checkout@v6" in text and "sanitize_ci_workspace_v187.py --ci" not in text:
+            fail(f"Workflow checkout is missing the source sanitizer: {path.relative_to(ROOT)}")
         for stale in [
             "actions/checkout@v4",
             "actions/checkout@v5",

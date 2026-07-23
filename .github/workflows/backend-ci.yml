@@ -26,6 +26,10 @@ jobs:
         working-directory: backend-laravel
     steps:
       - uses: actions/checkout@v6
+      - name: Sanitize checked-out source
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python3 tools/sanitize_ci_workspace_v187.py --ci
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
@@ -92,6 +96,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+      - name: Sanitize checked-out source
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: python3 tools/sanitize_ci_workspace_v187.py --ci
       - name: Prepare temporary Compose environment
         working-directory: backend-laravel
         run: |
