@@ -659,7 +659,7 @@ def check_release_and_wallet_regressions() -> None:
 
 def check_android_ci_order() -> None:
     workflow = read(".github/workflows/flutter-android.yml")
-    for needle in ["actions/checkout@v5", "actions/setup-java@v5", "actions/upload-artifact@v6"]:
+    for needle in ["actions/checkout@v6", "actions/setup-java@v5", "actions/upload-artifact@v7"]:
         if needle not in workflow:
             fail(f"Android official action version missing: {needle}")
     java_block = workflow.split("- name: Set up Java 17", 1)[1].split("- name:", 1)[0]
@@ -1445,6 +1445,20 @@ def check_v187_global_offline_contract() -> None:
     print(result.stdout.strip())
     print("[OK] v187 all-game offline routing, rummy organization, new engines and admin-health contract")
 
+
+def check_v187_ci_hardening_contract() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/verify_ci_hardening_v187.py")],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    if result.returncode != 0:
+        fail("Warqnaa v187 CI hardening contract failed: " + result.stdout.strip())
+    print(result.stdout.strip())
+    print("[OK] v187 secret cleanup, Composer lock recovery and current GitHub Actions contract")
+
 def check_v02_daily_prize_boxes_contract() -> None:
     result = subprocess.run(
         [sys.executable, str(ROOT / "tools/test_v02_daily_prize_boxes_contract.py")],
@@ -1518,6 +1532,7 @@ def main() -> None:
     check_v185_world_class_contract()
     check_v186_engine_integrity_contract()
     check_v187_global_offline_contract()
+    check_v187_ci_hardening_contract()
     check_secrets()
     check_dart_structure()
     print(f"[PASS] Warqna v{EXPECTED_BUILD} source-package preflight completed successfully")

@@ -1,6 +1,6 @@
 # Warqnaa — ورقنا
 
-الإصدار الحالي: **0.3.6+187**
+الإصدار الحالي: **0.3.6+187 FINAL CI FIXED**
 
 ابدأ من: `START_HERE_AR.md`
 
@@ -27,3 +27,11 @@
 - إصلاح سياسة الجذر النظيف لتقبل ملفات ترقية V142/V143 المعروفة فقط.
 - واجهة تنزيل وتركيب يدوية لهاند وبناكل، وترتيب سحب وإفلات لورق اللاعب.
 - تبويب سلامة المحركات في لوحة الإدارة، وعقود CI تمنع اختلاف كتالوج Flutter وLaravel.
+
+## V187 FINAL CI hardening
+
+- Full clean-source replacement package.
+- Secret-bearing runtime files are excluded and ignored.
+- Stale Composer locks are repaired safely in CI.
+- GitHub Actions use current Node 24-compatible official action majors.
+- Run `tools/verify_ci_hardening_v187.py` for the dedicated regression gate.

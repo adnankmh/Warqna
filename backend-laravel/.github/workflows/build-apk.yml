@@ -23,16 +23,16 @@ jobs:
 
     steps:
       - name: Checkout project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm
@@ -45,8 +45,14 @@ jobs:
           coverage: none
 
       - name: Install PHP dependencies if composer.json exists
+        shell: bash
         run: |
+          set -euo pipefail
           if [ -f composer.json ]; then
+            if [ -f composer.lock ] && ! composer validate --no-check-publish; then
+              echo "::warning::composer.lock is stale; regenerating it from composer.json."
+              rm -f composer.lock
+            fi
             composer install --no-interaction --prefer-dist --no-progress --optimize-autoloader
           fi
 
@@ -91,14 +97,14 @@ jobs:
           ./gradlew assembleDebug --stacktrace
 
       - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: warqna-zone-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
 
       - name: Upload Android build outputs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: warqna-android-build-logs
           path: |

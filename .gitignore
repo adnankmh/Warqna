@@ -1,7 +1,22 @@
+# Warqnaa repository ignore policy — V0.3.6+187 CI hardening
+
+# Runtime environments and secrets
 .env
 .env.*
 !.env.example
 !.env.production.example
+backend-laravel/.env
+backend-laravel/.env.*
+!backend-laravel/.env.example
+!backend-laravel/.env.production.example
+*.pem
+*.p12
+*.jks
+*.keystore
+key.properties
+firebase-service-account*.json
+
+# Dependencies and generated output
 vendor/
 node_modules/
 .dart_tool/
@@ -11,14 +26,20 @@ node_modules/
 build/
 flutter_app/android/
 flutter_app/ios/
+
+# Laravel runtime data
 backend-laravel/database/database.sqlite
 backend-laravel/storage/logs/*.log
 backend-laravel/storage/framework/cache/data/*
 backend-laravel/storage/framework/sessions/*
 backend-laravel/storage/framework/views/*
+
+# Editors and operating systems
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
 
+# Python caches
 __pycache__/
 *.pyc

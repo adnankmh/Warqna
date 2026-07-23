@@ -16,7 +16,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Load release metadata
         id: release
@@ -250,7 +250,7 @@ jobs:
           sha256sum "$AAB" > "$AAB.sha256"
 
       - name: Upload launch-safe APK and Play AAB
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: warqna-v${{ steps.release.outputs.build }}-android
           if-no-files-found: error

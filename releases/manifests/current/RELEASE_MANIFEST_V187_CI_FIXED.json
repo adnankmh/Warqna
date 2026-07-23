@@ -1,0 +1,19 @@
+{
+  "product": "Warqnaa",
+  "version": "0.3.6",
+  "build": 187,
+  "variant": "FINAL_CI_FIXED",
+  "source_file_count": 1561,
+  "fixes": [
+    "secret-bearing runtime files excluded",
+    "stale Composer lock recovery",
+    "PHPUnit and Mockery verification",
+    "current Node 24-compatible GitHub Actions majors",
+    "safe full-repository replacement tooling"
+  ],
+  "validation": {
+    "validate_release": "PASS",
+    "php_engine_regressions": "PASS",
+    "php_syntax_audit": "PASS"
+  }
+}

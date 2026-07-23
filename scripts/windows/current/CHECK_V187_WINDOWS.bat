@@ -1,6 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0\..\..\.."
+python tools\verify_ci_hardening_v187.py || goto :fail
 python tools\verify_release_versions.py || goto :fail
 python tools\test_clean_root_policy.py || goto :fail
 python tools\test_flutter_ci_contract.py || goto :fail

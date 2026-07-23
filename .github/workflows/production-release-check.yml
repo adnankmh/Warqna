@@ -17,7 +17,7 @@ jobs:
   secrets-and-config:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Validate source package and reject merge markers
         run: |
           python3 tools/test_clean_root_policy.py
@@ -51,6 +51,8 @@ jobs:
       - name: Audit all V187 20-game product engines
         run: php backend-laravel/tools/test-v186-engine-integrity.php
 
+      - name: Verify V187 CI hardening
+        run: python3 tools/verify_ci_hardening_v187.py
       - name: Run source preflight
         run: python3 tools/validate_release.py
       - name: Reject committed secrets and unsafe production defaults

@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Load release metadata
         id: release
@@ -109,7 +109,7 @@ jobs:
           flutter build ios --release --no-codesign "${EXTRA_ARGS[@]}"
 
       - name: Upload unsigned iOS app
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: warqna-v${{ steps.release.outputs.build }}-ios-unsigned
           if-no-files-found: error

@@ -1,0 +1,14 @@
+# Laravel runtime and local-only files
+/.env
+/.env.*
+!/.env.example
+!/.env.production.example
+/vendor/
+/database/*.sqlite
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/public/storage
+.phpunit.result.cache
+.phpunit.cache/

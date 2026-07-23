@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 cd "$ROOT"
+python3 tools/verify_ci_hardening_v187.py
 python3 tools/verify_release_versions.py
 python3 tools/test_clean_root_policy.py
 python3 tools/test_flutter_ci_contract.py

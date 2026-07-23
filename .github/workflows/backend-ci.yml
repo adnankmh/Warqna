@@ -25,7 +25,7 @@ jobs:
       run:
         working-directory: backend-laravel
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
@@ -33,10 +33,24 @@ jobs:
           extensions: mbstring, intl, pdo_sqlite, sqlite3, pdo_pgsql, bcmath
           coverage: none
           tools: composer:v2
+      - name: Verify V187 CI hardening contract
+        run: python3 ../tools/verify_ci_hardening_v187.py
       - name: Validate Composer definition
         run: composer validate --no-check-lock --strict
+      - name: Repair stale Composer lock safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f composer.lock ] && ! composer validate --no-check-publish; then
+            echo "::warning::composer.lock is stale or inconsistent; regenerating it from composer.json."
+            rm -f composer.lock
+          fi
       - name: Install backend dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
+      - name: Verify required test dependencies
+        run: |
+          composer show phpunit/phpunit --locked >/dev/null
+          composer show mockery/mockery --locked >/dev/null
       - name: Prepare test environment
         run: |
           cp .env.example .env
@@ -69,12 +83,15 @@ jobs:
         run: php artisan test
       - name: Production preflight in non-strict mode
         run: php artisan warqna:production-check
+      - name: Remove temporary Laravel environment
+        if: always()
+        run: rm -f .env
 
   docker-definition:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Prepare temporary Compose environment
         working-directory: backend-laravel
         run: |
